@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yolomt"
+version = "1.0.0"
+description = "YoloMT: a real-time streaming video captioner, LFM2.5-VL-450M reading cached past frames as 16 tokens each"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Nessim Ben Abbes" }]
+dependencies = [
+    "torch>=2.8",
+    "transformers>=5.16",
+    "peft>=0.17",
+    "safetensors>=0.4",
+    "huggingface_hub>=1.0",
+    "numpy>=2",
+    "pillow>=11",
+    "av>=14",
+]
+
+[project.optional-dependencies]
+# the teacher, the judges and the reward model run on vLLM
+vllm = ["vllm>=0.30"]
+
+[tool.setuptools.packages.find]
+include = ["yolomt*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+files = ["yolomt", "scripts"]
