@@ -33,3 +33,8 @@ python_version = "3.12"
 strict = true
 ignore_missing_imports = true
 files = ["yolomt", "scripts"]
+
+# PyAV's VideoFrame.to_image carries no annotations
+[[tool.mypy.overrides]]
+module = ["yolomt.video"]
+disable_error_code = ["no-untyped-call"]
