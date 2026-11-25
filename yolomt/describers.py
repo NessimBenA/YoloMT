@@ -17,7 +17,9 @@ Models of the main environment (requirements.txt) run through `describe`; CUDA_V
 
 from __future__ import annotations
 
+import json
 import subprocess
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from importlib import metadata
@@ -35,6 +37,7 @@ from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, horizon_request, 
 
 MAX_NEW = 80
 MOBILEVGPT_FRAMES = 16
+DROP_THRESHOLD = 0.5  # cosine similarity above which TimeChat-Online drops a visual token, as in its eval scripts
 FASTVLM_IMAGE_TOKEN = -200  # IMAGE_TOKEN_INDEX of the model's remote code: its input ids hold one per image
 LIBRARIES = ("torch", "transformers", "vllm", "timm", "flash-attn", "qwen-vl-utils", "mamba-ssm", "causal-conv1d")
 
@@ -97,13 +100,21 @@ class MobileVideoGpt:
 
 
 @dataclass(frozen=True)
+class TimeChatOnline:
+    """TimeChat-Online under its authors' modelling code (the `eval` folder of their repository on PYTHONPATH) and the
+    library versions of `requirements/timechat.txt`. The K + 1 frames are read as one video through qwen_vl_utils; the
+    authors' feature-level Differential Token Drop removes a visual token whose cosine similarity to the token at its
+    position one temporal pair earlier exceeds DROP_THRESHOLD, so the prompt is shorter than the frames' tokens."""
+
+
+@dataclass(frozen=True)
 class FastVlm:
     """FastVLM under its Hugging Face remote code and the library versions of `requirements/fastvlm.txt`, one clip at a
     time (a batch changes its float16 results). The code takes one <image> placeholder per image, so the K + 1 frames
     are K + 1 placeholders in the one user turn."""
 
 
-Backend = Vllm | Transformers | MobileVideoGpt | FastVlm
+Backend = Vllm | Transformers | MobileVideoGpt | TimeChatOnline | FastVlm
 
 
 @dataclass(frozen=True)
@@ -177,6 +188,8 @@ DESCRIBERS: dict[str, Teacher | Baseline] = {
                           Vllm()),
     "streamingvlm-7b": Baseline("mit-han-lab/StreamingVLM", "7ac1cef46d20432053a9814838760318cb26b348", Plain(),
                                 Images(), Vllm(silent=("...", " ...", "…"), minimum=1, penalty=1.05)),
+    "timechat-online-7b": Baseline("wyccccc/TimeChatOnline-7B", "4aa3f6f531214f0019c86c6c8e0a16d98af5d46a", Plain(),
+                                   Video(), TimeChatOnline(), chunk=24),
     "mobilevgpt-0.5b": Baseline("Amshaker/Mobile-VideoGPT-0.5B", "4eb2062cbe7de1a4397d0e6d02df4c52b947302b", Facts(),
                                 Video(), MobileVideoGpt(), Half(), chunk=16),
     "fastvlm-0.5b": Baseline("apple/FastVLM-0.5B", "16375720c2d673fa583e57e9876afde27549c7d0", Live(), Images(),
@@ -195,6 +208,21 @@ class Generated:
     finish: str | None = None
     prompt_tokens: int | None = None
     visual: tuple[int, int] | None = None
+
+
+@dataclass(frozen=True)
+class Prefilled:
+    """One clip after its prefill under the authors' drop. first: the first generated token; cache: per layer (keys,
+    values), each (1, heads, kept, head_dim); position: the rotary position of the next token (the original sequence's:
+    the kept tokens keep theirs); seen: (V,) bool, the token ids of the whole prompt, which the repetition penalty
+    reads; prompt_tokens: the prompt's length after the drop; visual: (kept, total) visual tokens."""
+
+    first: int
+    cache: tuple[tuple[torch.Tensor, torch.Tensor], ...]
+    position: int
+    seen: torch.Tensor
+    prompt_tokens: int
+    visual: tuple[int, int]
 
 
 # a model's clips of one lookback: (B, K + 1, 3, 256, 256) uint8, oldest frame first
@@ -345,6 +373,94 @@ def transformers_engine(model: Baseline) -> Engine:
     return generate
 
 
+def timechat_engine(model: Baseline) -> Engine:
+    """TimeChat-Online as `eval/scripts/videomme.py` of its repository runs it: its Qwen2_5_VLForConditionalGeneration,
+    flash-attention 2, the frames through `process_vision_info` as one video (an odd count repeats the last frame, K = 0
+    reads frame t twice, one temporal pair), the prefill `forward(drop_method="feature", ...)` one clip at a time (the
+    drop keeps a different number of tokens per clip). The decoding is `generate`'s greedy loop for a batch: the clips'
+    caches are left-padded to one length and each step feeds every clip its next token at its own rotary position, with
+    the checkpoint's repetition penalty over the whole prompt and the tokens so far. The frames keep their 256 x 256
+    (the processor rounds to 252 x 252, 81 tokens per temporal pair), not the authors' 448 x 448 setting, which would
+    upsample them. The number of visual tokens kept is read from the drop's own log, one line per prefill."""
+    from qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
+    from qwen_vl_utils import process_vision_info
+    from transformers import AutoProcessor, DynamicCache
+
+    net = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+        model.repo, revision=model.revision, torch_dtype=dtype_of(model.precision),
+        attn_implementation="flash_attention_2", device_map={"": 0}).eval()
+    processor = AutoProcessor.from_pretrained(model.repo, revision=model.revision)  # type: ignore[no-untyped-call]
+    stops = torch.tensor(net.generation_config.eos_token_id, device=net.device)
+    penalty = float(net.generation_config.repetition_penalty)
+    vocab = int(net.config.vocab_size)
+
+    def next_token(logits: torch.Tensor, seen: torch.Tensor) -> torch.Tensor:
+        """(B, V) logits, (B, V) bool seen: the repetition penalty (a seen token's score is divided by the penalty if
+        positive, multiplied if negative), then the greedy token."""
+        scores = logits.float()
+        return torch.where(seen, torch.where(scores < 0, scores * penalty, scores / penalty), scores).argmax(dim=-1)
+
+    def prefill(clip: torch.Tensor, text: str, log: Path) -> Prefilled:
+        turn = [{"role": "user", "content": [{"type": "video", "video": pil(clip)}, {"type": "text", "text": text}]}]
+        prompt = processor.apply_chat_template(turn, tokenize=False, add_generation_prompt=True)
+        images, videos = process_vision_info(turn)
+        inputs = processor(text=[prompt], images=images, videos=videos, padding=True, return_tensors="pt")
+        inputs = inputs.to(net.device)
+        made = net(**inputs, use_cache=True, return_dict=True, drop_method="feature", drop_threshold=DROP_THRESHOLD,
+                   drop_absolute=True, dr_save_path=str(log))
+        seen = torch.zeros(vocab, dtype=torch.bool, device=net.device)
+        seen[inputs["input_ids"][0]] = True
+        first = next_token(made.logits[:, -1], seen[None])
+        length = int(inputs["input_ids"].shape[1])
+        (line,) = log.read_text().splitlines()
+        log.unlink()
+        counted = json.loads(line)
+        seen[first] = True
+        return Prefilled(int(first), tuple(made.past_key_values.to_legacy_cache()),
+                         length + int(made.rope_deltas.item()), seen, length - counted["drop"],
+                         (counted["total"] - counted["drop"], counted["total"]))
+
+    @torch.inference_mode()
+    def generate(clips: torch.Tensor) -> list[Generated]:
+        text = instruction(model.wording, loops=clips.shape[1] - 1)
+        with tempfile.TemporaryDirectory() as folder:
+            done = [prefill(clip, text, Path(folder) / "drop.jsonl") for clip in clips]
+        count, longest = len(done), max(d.cache[0][0].shape[2] for d in done)
+        padding = [longest - d.cache[0][0].shape[2] for d in done]
+        layers = tuple(
+            (torch.cat([torch.nn.functional.pad(d.cache[layer][0], (0, 0, pad, 0)) for d, pad in zip(done, padding, strict=True)]),
+             torch.cat([torch.nn.functional.pad(d.cache[layer][1], (0, 0, pad, 0)) for d, pad in zip(done, padding, strict=True)]))
+            for layer in range(len(done[0].cache)))
+        cache = DynamicCache.from_legacy_cache(layers)  # type: ignore[attr-defined]
+        mask = torch.stack([torch.arange(longest, device=net.device) >= pad for pad in padding]).long()
+        seen = torch.stack([d.seen for d in done])
+        position = torch.tensor([d.position for d in done], device=net.device)
+        token = torch.tensor([d.first for d in done], device=net.device)
+        tokens = [token]
+        stopped = torch.isin(token, stops)
+        for step in range(MAX_NEW - 1):
+            if bool(stopped.all()):
+                break
+            mask = torch.cat([mask, mask.new_ones(count, 1)], dim=1)
+            made = net(input_ids=token[:, None], attention_mask=mask,
+                       position_ids=(position + step)[None, :, None].expand(3, -1, -1), past_key_values=cache,
+                       use_cache=True, cache_position=torch.tensor([longest + step], device=net.device),
+                       return_dict=True)
+            token = next_token(made.logits[:, -1], seen)
+            seen[torch.arange(count), token] = True
+            tokens.append(token)
+            stopped = stopped | torch.isin(token, stops)
+        out = []
+        for row, d in zip(torch.stack(tokens, dim=1), done, strict=True):
+            ended = torch.isin(row, stops).nonzero()
+            cut = int(ended[0]) + 1 if len(ended) else len(row)
+            out.append(Generated(processor.decode(row[:cut], skip_special_tokens=True),
+                                 "stop" if len(ended) else "length", d.prompt_tokens, d.visual))
+        return out
+
+    return generate
+
+
 def mobilevgpt_frames(count: int) -> list[int]:
     """Indices into a clip's `count` = K + 1 frames, oldest first, of the MOBILEVGPT_FRAMES frames Mobile-VideoGPT
     reads: round(i K / 15) for i = 0 .. 15. The oldest and the current frame are always in; for K < 15 frames repeat in
@@ -475,6 +591,8 @@ def baseline_engine(model: Baseline, *, memory: float) -> Engine:
             return transformers_engine(model)
         case MobileVideoGpt():
             return mobilevgpt_engine(model)
+        case TimeChatOnline():
+            return timechat_engine(model)
         case FastVlm():
             return fastvlm_engine(model)
         case _:
