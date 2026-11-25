@@ -32,10 +32,12 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8775)
     args = parser.parse_args()
     heldout.check()
-    held = heldout.held_out(args.labels, wanted=heldout.listed(args.windows))
+    wanted = heldout.listed(args.windows)
+    held = heldout.held_out(args.labels, wanted=wanted)
     captions = {path.stem: heldout.read_captions(path) for path in args.captions}
     assert len(captions) == len(args.captions), "two caption files share a name"
-    print(f"{len(held)} scored windows of {len({h.window.video_id for h in held})} videos", flush=True)
+    print(f"{len(held)} scored windows of {len({h.window.video_id for h in held})} videos, {len(wanted)} listed",
+          flush=True)
     args.out.mkdir()
     plan = Plan(HELD_OUT, port=args.port, max_model_len=4096, memory=args.memory, max_num_seqs=16,
                 max_num_batched_tokens=2048, template={}, threads=64)
