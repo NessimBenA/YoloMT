@@ -149,16 +149,17 @@ class Student(nn.Module):
 
     position: torch.Tensor
 
-    def __init__(self, *, tuning: Tuning, dtype: torch.dtype, weights: bool = True) -> None:
+    def __init__(self, *, tuning: Tuning, dtype: torch.dtype, weights: bool = True, attention: str = "sdpa") -> None:
         """weights: start from the base model's weights; without, only its configuration and tokenizer are read, for
-        a caller that loads every weight."""
+        a caller that loads every weight. attention: the transformers attention implementation of the SigLIP layers
+        and the LM; an ONNX export of the vision encoder traces "eager"."""
         super().__init__()
         check_pooler()
         from_config: Any = AutoModelForImageTextToText.from_config
         base = (AutoModelForImageTextToText.from_pretrained(BASE, revision=BASE_REVISION, dtype=dtype,
-                                                            attn_implementation="sdpa")
+                                                            attn_implementation=attention)
                 if weights else from_config(AutoConfig.from_pretrained(BASE, revision=BASE_REVISION), dtype=dtype,
-                                            attn_implementation="sdpa"))
+                                            attn_implementation=attention))
         self.tokenizer: Any = AutoTokenizer.from_pretrained(BASE, revision=BASE_REVISION)
         special: Any = self.tokenizer.convert_tokens_to_ids
         self.layout = Layout(
@@ -481,10 +482,11 @@ def read_config(folder: Path) -> FolderConfig:
     return FolderConfig(tuning=tuning, k_max=int(raw["k_max"]), max_new=int(raw["max_new"]), step=step)
 
 
-def load_folder(folder: Path, *, dtype: torch.dtype) -> Student:
-    """The student of a model folder, on the CPU, built in `dtype` (the projector and the pooler in float32). A full
-    folder needs only the base's configuration and tokenizer; a LoRA one its weights too."""
+def load_folder(folder: Path, *, dtype: torch.dtype, attention: str = "sdpa") -> Student:
+    """The student of a model folder, on the CPU, built in `dtype` (the projector and the pooler in float32) with the
+    given attention implementation. A full folder needs only the base's configuration and tokenizer; a LoRA one its
+    weights too."""
     config = read_config(folder)
-    student = Student(tuning=config.tuning, dtype=dtype, weights=isinstance(config.tuning, Lora))
+    student = Student(tuning=config.tuning, dtype=dtype, weights=isinstance(config.tuning, Lora), attention=attention)
     load_state(student, load_file(folder / WEIGHTS))
     return student
