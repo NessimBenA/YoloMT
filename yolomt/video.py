@@ -8,7 +8,10 @@ windows also sees grid frames: grid frame k is the first decoded frame at or aft
 from __future__ import annotations
 
 import io
+import pickle
 import re
+import subprocess
+import sys
 import tarfile
 import zipfile
 from dataclasses import dataclass
@@ -164,6 +167,23 @@ def decode(data: bytes, *, seconds: set[int], grid: set[int]) -> Decoded:
             break
     container.close()
     return Decoded(student, frames, k - 1)
+
+
+def decode_isolated(data: bytes, *, seconds: set[int], grid: set[int]) -> Decoded | None:
+    """`decode` in a child process, None when it fails. Some archive files are corrupt part way through (PyAV raises
+    InvalidDataError), so the failure is read from the child's exit code."""
+    done = subprocess.run([sys.executable, "-c", "from yolomt.video import decode_child; decode_child()"],
+                          input=pickle.dumps((data, seconds, grid)), capture_output=True)
+    if done.returncode != 0:
+        return None
+    decoded: Decoded = pickle.loads(done.stdout)
+    return decoded
+
+
+def decode_child() -> None:
+    """The child of `decode_isolated`: (video bytes, seconds, grid) as a pickle on stdin, the `Decoded` on stdout."""
+    data, seconds, grid = pickle.loads(sys.stdin.buffer.read())
+    sys.stdout.buffer.write(pickle.dumps(decode(data, seconds=seconds, grid=grid)))
 
 
 def duration(data: bytes) -> float:
