@@ -232,7 +232,7 @@ def yolomt_caption(student: Student, frames: Frames, *, loops: int, length: Leng
     if cached is None:
         slots = tokens_t
     else:
-        # the new frame's block joins the cache for the later captions
+        # the new frame's pooled block is what a stream caches for the later captions: timed, not read here
         student.pooler(tokens_t)
         slots = torch.cat([cached, tokens_t], dim=1)
     result = student.lm(inputs_embeds=embed(student, ids, slots), use_cache=True)
