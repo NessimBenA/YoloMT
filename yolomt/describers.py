@@ -174,7 +174,7 @@ DESCRIBERS: dict[str, Teacher | Baseline] = {
     "lfm25-vl-1.6b": Baseline("LiquidAI/LFM2.5-VL-1.6B", "919fde3d022e3f90a4716006f993938ee8c2eb97", Live(), Images(),
                               Vllm()),
     "smolvlm2-500m": Baseline("HuggingFaceTB/SmolVLM2-500M-Video-Instruct", "7b375e1b73b11138ff12fe22c8f2822d8fe03467",
-                              Plain(), Images(), Transformers(), chunk=16),
+                              Plain(), Images(), Transformers(), chunk=64),
     "smolvlm2-2.2b": Baseline("HuggingFaceTB/SmolVLM2-2.2B-Instruct", "482adb537c021c86670beed01cd58990d01e72e4",
                               Facts(), Images(), Transformers(), chunk=16),
     "internvl35-1b": Baseline("OpenGVLab/InternVL3_5-1B", "2f71cf52542334823e48a46ffba0e2bc9add3446", Plain(), Images(),
