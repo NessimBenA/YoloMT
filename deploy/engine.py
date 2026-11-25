@@ -12,19 +12,20 @@ and `runtime.pt` holds what `deploy/run.py` needs: the prompt rows at every look
 pooler and the constants. `engine.json` records the checks below with the versions and the ONNX digests.
 
 The head keeps the 16,575 token ids of `data/vocab_trim.json` instead of the 65,536 rows of the tied embedding: the
-most frequent tokens covering 99.9% of the 46,874,376 token occurrences of the 942,645 captions the 16 s SFT stage
-trained on, plus the 256 byte tokens and the 127 special tokens (sha256 08e72cd4...). The file is the one the paper's
-engine used, unchanged; rebuilding it needs the teacher's labels. A caption token outside it cannot be written.
+16,280 most frequent of the 30,701 token ids in the 942,645 teacher captions of the 16 s SFT stage (99.9% of their
+46,874,376 token occurrences), plus the 256 byte tokens and the 127 special tokens (sha256 08e72cd4...). The file is the
+one the paper's engine used, unchanged; rebuilding it needs the teacher's labels. A token outside it cannot be written.
 
-Checks, each asserted, on `--windows` windows of Cooking_cake at seconds 16, 20, 24, ... (every L = 0 .. 16 on each):
-- vision: the engine's tokens against float32 PyTorch's on every frame the windows use (minimum row cosine, at
-  least 0.9: one token of one frame may sit far from float32 in FP16 while the frame's relative error is 0.02);
-- writer: every prefill chunk and the decode step after it, the engine given the float32 states, against float32
-  PyTorch: the next token of the last chunk and of the decode step agree on every window; the hidden state and every
-  state row keep a cosine of at least 0.999. The next token of a chunk before the last is never read and only reported;
-- captions: the whole runtime (`deploy/run.py`) against float32 `write` (full head, no previous caption), the share of
-  captions that are equal, reported. FP16 may flip a token where two are close, so the paper's 84-94% is not 100%.
-This check is not optional on a new GPU: some TensorRT versions build a writer whose T > 1 profiles are wrong on some
+Checks, on `--windows` windows of Cooking_cake at seconds 16, 20, 24, ... (every L = 0 .. 16 on each):
+- vision (asserted): the engine's tokens against float32 PyTorch's on every frame the windows use, minimum row cosine
+  at least 0.9: one token of one frame may sit far from float32 in FP16 while the frame's relative error is 0.02;
+- writer (asserted): every prefill chunk and the decode step after it, the engine given the float32 states, against
+  float32 PyTorch. The next token of the last chunk and of the decode step agree on every window; the hidden state and
+  every state row keep a cosine of at least 0.999. The next token of a chunk before the last is never read, only
+  reported;
+- captions (reported): the whole runtime (`deploy/run.py`) against float32 `write` (full head, no previous caption),
+  the share of captions that are equal. FP16 may flip a token where two are close, so the paper's 84-94% is not 100%.
+The checks are not optional on a new GPU: some TensorRT versions build a writer whose T > 1 profiles are wrong on some
 GPUs while its T = 1 profiles pass.
 
 Versions of the paper's build: TensorRT 10.16.1.11, onnx 1.23.0, torch 2.11, transformers 5.16.1. With torch 2.10 and
@@ -50,8 +51,8 @@ import torch.nn.functional as F
 import transformers
 from run import FPS, STREAM_CLIP, Writer, call, caption, clip, context_for, load, text
 
-from yolomt.graphs import (DECODE, EXTEND, Call, Chunk, Vision, decode_call, engine_precision, export_vision,
-                           export_writer, io_names, prefill_calls, runtime_of, save_runtime)
+from yolomt.graphs import (DECODE, EXTEND, Call, Chunk, Runtime, Vision, decode_call, engine_precision,
+                           export_vision, export_writer, io_names, prefill_calls, runtime_of, save_runtime)
 from yolomt.model import (Full, Student, embed, folder_of, load_folder, prompt, read_config, see, see_past, visual,
                           write)
 
@@ -177,6 +178,22 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def build_engines(student: Student, runtime: Runtime, *, kept: list[int], out: Path) -> None:
+    """vision.onnx and writer.onnx from an FP16 copy of the float32 `student`, exported on the CPU, then their
+    engines."""
+    half = copy.deepcopy(student)
+    engine_precision(half)
+    export_vision(Vision(half), out / "vision.onnx")
+    export_writer(Chunk(half.lm, kept=kept, t_max=runtime.t_max), out / "writer.onnx",
+                  tokens=len(runtime.prompts[1].embeds))
+    width = int(student.embed.weight.shape[1])
+    longest = max(max(p.chunks) for p in runtime.prompts)
+    assert EXTEND == len(DECODE)
+    build(out / "vision.onnx", out / "vision.engine", width=width, profiles=[])
+    build(out / "writer.onnx", out / "writer.engine", width=width,
+          profiles=[*[(1, 1, 1)] * len(DECODE), (1, longest, longest)])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--weights", default="Nessim/YoloMT", help="a model folder or a Hugging Face model repo")
@@ -194,18 +211,7 @@ def main() -> None:
     assert student.layout.im_end in kept, "the kept head could never close a caption"
     runtime = runtime_of(student, k_max=config.k_max, written=config.max_new, kept=kept)
     save_runtime(runtime, args.out / "runtime.pt")
-    half = copy.deepcopy(student)
-    engine_precision(half)
-    export_vision(Vision(half), args.out / "vision.onnx")
-    export_writer(Chunk(half.lm, kept=kept, t_max=runtime.t_max), args.out / "writer.onnx",
-                  tokens=len(runtime.prompts[1].embeds))
-    del half
-    width = int(student.embed.weight.shape[1])
-    longest = max(max(p.chunks) for p in runtime.prompts)
-    assert EXTEND == len(DECODE)
-    build(args.out / "vision.onnx", args.out / "vision.engine", width=width, profiles=[])
-    build(args.out / "writer.onnx", args.out / "writer.engine", width=width,
-          profiles=[*[(1, 1, 1)] * len(DECODE), (1, longest, longest)])
+    build_engines(student, runtime, kept=kept, out=args.out)
 
     student.cuda()
     chunk = Chunk(student.lm, kept=kept, t_max=runtime.t_max)
