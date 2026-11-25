@@ -42,6 +42,7 @@ from numpy.typing import NDArray
 
 from yolomt.data import Question, Target, Window, frame_name, lines, past_frames, window_of
 from yolomt.facts import CONSENSUS_FRACTION, Run, score
+from yolomt.stats import Interval
 from yolomt.teacher import HORIZON, Horizon, limits
 
 WORDS = limits(Horizon()).words
@@ -104,15 +105,6 @@ class Ratio:
 
     top: Column
     bottom: Column
-
-
-@dataclass(frozen=True)
-class Interval:
-    """A difference of shares in points, and the 2.5th and 97.5th percentiles of its resamples."""
-
-    estimate: float
-    low: float
-    high: float
 
 
 @dataclass(frozen=True)

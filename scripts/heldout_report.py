@@ -23,7 +23,8 @@ from pathlib import Path
 import numpy as np
 
 from yolomt import heldout
-from yolomt.heldout import Draws, Interval, Judging, Ratio
+from yolomt.heldout import Draws, Judging, Ratio
+from yolomt.stats import Interval
 
 
 def ratios(judgings: list[Judging], *, free: bool) -> dict[str, dict[int, Ratio]]:
