@@ -1,9 +1,9 @@
 """Caption with a describer of the benchmark table: YoloMT, an open model, or the teacher.
 
-    python scripts/describe.py --model yolomt --weights Nessim/YoloMT --bench <bench>/ovo --loops protocol \
+    python scripts/describe.py --model yolomt --weights Nessim/YoloMT --bench <bench>/ovo --loops protocol \\
         --out <captions>/ovo/yolomt-kprotocol.jsonl
     python scripts/describe.py --model lfm25-vl-450m --bench <bench>/ovo --loops 0 --out <captions>/ovo/lfm-k0.jsonl
-    python scripts/describe.py --model yolomt --windows data/windows/test.tsv.gz --labels <labels>/test --loops 0 16 \
+    python scripts/describe.py --model yolomt --windows data/windows/test.tsv.gz --labels <labels>/test --loops 0 16 \\
         --out <captions>/test.jsonl
 
 With `--bench`, the folder (`requests.jsonl` and the frames tars of a benchmark) is captioned request by request,
@@ -12,7 +12,8 @@ written in the order of requests.jsonl: video, t, loops (the K used) and the cap
 of the list that the label roots (`scripts/label.py`) hold are captioned at each K of `--loops`, one line per window
 and K, keyed by the window. A baseline's line also holds finish, prompt_tokens, model and wording
 (`yolomt.describers`). The resolved settings, the git revision and the library versions go to `<out>.run.json`;
-neither file is ever overwritten. One GPU process; `--memory` is the share of its memory vLLM may use.
+neither file is ever overwritten. One GPU process; `--memory` is the share of its memory vLLM may use. FastVLM-0.5B,
+Mobile-VideoGPT-0.5B and TimeChat-Online-7B run in the environments of `requirements/` (`yolomt.describers`).
 """
 
 from __future__ import annotations
