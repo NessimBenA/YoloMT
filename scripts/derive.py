@@ -66,7 +66,8 @@ def derive(run: Run, records: list[dict[str, Any]], *, seed: int) -> list[dict[s
         key = f"{r['video_id']}@{r['t1']}"
         questions.append(parse_mcq(reply, random.Random(f"{seed}:{key}")) if reply.complete else [])
 
-    replies = iter(run([answer_ask(None, [rotate(q, shift) for q in qs]) for qs in questions if qs for shift in range(4)]))
+    blind = [answer_ask(None, [rotate(q, shift) for q in qs]) for qs in questions if qs for shift in range(4)]
+    replies = iter(run(blind))
     kept: list[list[Question]] = []
     for qs in questions:
         if not qs:

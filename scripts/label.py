@@ -57,7 +57,7 @@ def prepared(task: Task, video: Video, data: bytes) -> Decoded:
     ends = [t for run in video.runs for t in run]
     seconds = {s for t in ends for s in range(start(task, t), t + 1)}
     decoded = decode(data, seconds=seconds, grid={k for t in ends for k in grid_span(task, t)})
-    assert set(decoded.student) == seconds, f"{video.video_id}: seconds {sorted(seconds - set(decoded.student))} missing"
+    assert set(decoded.student) == seconds, f"{video.video_id}: {sorted(seconds - set(decoded.student))} not decoded"
     return decoded
 
 
@@ -141,7 +141,8 @@ def main() -> None:
         path = fetch(archive, downloads)
         pending: tuple[int, list[Video], list[Future[Decoded]]] | None = None
         found = 0
-        stream = ((wanted[i], data) for member, data in members(path) if (i := video_id_of(archive.source, member)) in wanted)
+        stream = ((wanted[i], data) for member, data in members(path)
+                  if (i := video_id_of(archive.source, member)) in wanted)
         for number, chunk in enumerate(itertools.batched(stream, args.videos_per_chunk)):
             found += len(chunk)
             if (folder / f"records_{number:05d}.jsonl").exists():

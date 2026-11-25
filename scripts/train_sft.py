@@ -177,8 +177,8 @@ def main() -> None:
             tokens, summed = 0, 0.0
             for j in range(per_step):
                 part = next(loader)
-                found = losses(student, part, sandwich(int(part["pasts"].shape[1]), random.Random(f"{args.seed}:{step}:{j}")),
-                               device)
+                loops_j = sandwich(int(part["pasts"].shape[1]), random.Random(f"{args.seed}:{step}:{j}"))
+                found = losses(student, part, loops_j, device)
                 torch.autograd.backward(torch.stack([r.loss * r.tokens for r in found.values()]).sum())
                 tokens += sum(r.tokens for r in found.values())
                 summed += sum(float(r.loss) * r.tokens for r in found.values())

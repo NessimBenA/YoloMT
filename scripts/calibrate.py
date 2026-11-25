@@ -42,11 +42,13 @@ def main() -> None:
     salad = np.asarray(bits_per_character(scorer, shuffled))
     content, pairs = (np.asarray(x) for x in zip(*(repeats(c) for c in captions)))
     result = {"scorer": SCORER, "captions": len(captions), "device": device.type,
-              "p05": float(np.percentile(bpc, 5)), "median": float(np.median(bpc)), "p95": float(np.percentile(bpc, 95)),
+              "p05": float(np.percentile(bpc, 5)), "median": float(np.median(bpc)),
+              "p95": float(np.percentile(bpc, 95)),
               "shuffled_p05": float(np.percentile(salad, 5)), "shuffled_median": float(np.median(salad)),
               "shuffled_p95": float(np.percentile(salad, 95)),
               "stutter_rate": sum(stutters(c) for c in captions) / len(captions),
-              "content_repeats_p95": int(np.percentile(content, 95)), "bigram_repeats_p95": int(np.percentile(pairs, 95))}
+              "content_repeats_p95": int(np.percentile(content, 95)),
+              "bigram_repeats_p95": int(np.percentile(pairs, 95))}
     args.out.write_text(json.dumps(result, indent=1))
 
 

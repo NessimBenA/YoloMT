@@ -66,7 +66,7 @@ JUDGES = {
 
 @dataclass(frozen=True)
 class Slice:
-    """Windows start .. stop-1 of a step, all read at lookback `loops`; their rows are start * group .. stop * group-1."""
+    """Windows start .. stop-1 of a step, all read at lookback `loops`; rows start * group .. stop * group - 1."""
 
     loops: int
     start: int
@@ -177,8 +177,9 @@ def surrogate(new_logp: torch.Tensor, old_logp: torch.Tensor, mask: torch.Tensor
     return -objective[active].sum() + KL * (gap.exp() - gap - 1)[active].sum()
 
 
-def update(student: Student, optimizer: torch.optim.Optimizer, data: Lookback, written: Written, advantage: torch.Tensor,
-           kept: torch.Tensor, ref_logp: torch.Tensor, *, micro: int, device: torch.device) -> float:
+def update(student: Student, optimizer: torch.optim.Optimizer, data: Lookback, written: Written,
+           advantage: torch.Tensor, kept: torch.Tensor, ref_logp: torch.Tensor, *, micro: int,
+           device: torch.device) -> float:
     """Replays every kept caption with gradients, one slice at a time, and takes the step; the gradient norm."""
     params = [p for p in student.parameters() if p.requires_grad]
     kept_rows = kept.repeat_interleave(GROUP)
@@ -219,7 +220,8 @@ def validate(student: Student, data: Lookback, judge: Run, fluency: Fluency, wei
     targets = [w.target for w in data.items]
     assert all(t is not None for t in targets)
     within = [bool(c.strip()) and len(c.split()) <= weights.budget for c in captions]
-    parsed = [parses(c) and b < fluency.b_shuffled for c, b in zip(captions, bits_per_character(fluency.scorer, captions))]
+    bpcs = bits_per_character(fluency.scorer, captions)
+    parsed = [parses(c) and b < fluency.b_shuffled for c, b in zip(captions, bpcs)]
     scores = score(judge, captions, [t for t in targets if t is not None])
     gates = [gate(fluency, c, r) if ok else 0.0 for c, r, ok in zip(captions, rated(judge, captions), parsed)]
     return [(f1(s) if ok and s.complete else 0.0) * g for s, ok, g in zip(scores, within, gates)]
@@ -245,7 +247,7 @@ def eligible(dirs: list[Path], split: str) -> tuple[list[Window], list[tuple[str
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--labels", type=Path, nargs="+", required=True, help="derived label roots of the RL windows")
-    parser.add_argument("--val", type=Path, nargs="+", required=True, help="derived label roots of the validation windows")
+    parser.add_argument("--val", type=Path, nargs="+", required=True, help="derived label roots of the val windows")
     parser.add_argument("--init", type=Path, required=True, help="the model folder of stage 3")
     parser.add_argument("--out", type=Path, required=True, help="run folder")
     parser.add_argument("--judge-gpu", required=True, help="the physical GPU the judges take turns on")
@@ -307,7 +309,8 @@ def main() -> None:
         rule = evaluated(rule, sum(heldout) / len(heldout))
         print(f"step {step}: held-out gated fact-F1 {rule.last:.4f} best {rule.best:.4f}", file=sys.stderr, flush=True)
         if improved(rule):
-            save_folder(student, args.out / "best", FolderConfig(tuning=Full(), k_max=K_MAX, max_new=MAX_NEW, step=step))
+            save_folder(student, args.out / "best",
+                        FolderConfig(tuning=Full(), k_max=K_MAX, max_new=MAX_NEW, step=step))
         return heldout
 
     def save() -> None:
@@ -333,8 +336,8 @@ def main() -> None:
         written = rollouts(student, data, group=GROUP, micro=WINDOWS, temperature=TEMPERATURE, generator=generator,
                            device=device)
         ref_logp = reference_logp(student, reference, data, written, micro=args.micro, device=device)
-        parts = scored(judges["qwen"], fluency, control.weights, [train_items[i].key for i in chosen for _ in range(GROUP)],
-                       written.captions, targets)
+        keys = [train_items[i].key for i in chosen for _ in range(GROUP)]
+        parts = scored(judges["qwen"], fluency, control.weights, keys, written.captions, targets)
         reward = torch.tensor([p.reward for p in parts], device=device)
         advantage, kept = advantages(reward)
         kept = kept & torch.tensor([p.complete for p in parts], device=device).view(-1, GROUP).all(1)

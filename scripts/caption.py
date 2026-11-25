@@ -27,7 +27,8 @@ def frames_of(data: bytes) -> torch.Tensor:
     seconds = int(duration(data))
     decoded = decode(data, seconds=set(range(seconds)), grid=set())
     assert set(decoded.student) == set(range(seconds)), "the video ends before its last whole second"
-    return torch.from_numpy(np.stack([rgb(decoded.student[s]) for s in range(seconds)])).permute(0, 3, 1, 2).contiguous()
+    array = np.stack([rgb(decoded.student[s]) for s in range(seconds)])
+    return torch.from_numpy(array).permute(0, 3, 1, 2).contiguous()
 
 
 def main() -> None:

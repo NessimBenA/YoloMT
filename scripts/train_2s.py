@@ -64,7 +64,8 @@ class Previous(Dataset[dict[str, Any]]):
 
 
 def collate(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    return {"frame_t": torch.stack([r["frame_t"] for r in rows]), "frame_prev": torch.stack([r["frame_prev"] for r in rows]),
+    return {"frame_t": torch.stack([r["frame_t"] for r in rows]),
+            "frame_prev": torch.stack([r["frame_prev"] for r in rows]),
             "caption": [r["caption"] for r in rows], "previous": [r["previous"] for r in rows]}
 
 

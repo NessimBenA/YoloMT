@@ -53,7 +53,8 @@ def offline(model: str, *, max_model_len: int, memory: float, max_num_seqs: int)
     def run(asks: list[Ask]) -> list[Reply]:
         if not asks:
             return []
-        params = [SamplingParams(temperature=0.0, max_tokens=a.max_tokens, logprobs=len(a.choice) + 5 if a.choice else None,
+        params = [SamplingParams(temperature=0.0, max_tokens=a.max_tokens,
+                                 logprobs=len(a.choice) + 5 if a.choice else None,
                                  structured_outputs=StructuredOutputsParams(choice=list(a.choice)) if a.choice
                                  else StructuredOutputsParams(json=a.schema, disable_any_whitespace=True))
                   for a in asks]
@@ -62,7 +63,8 @@ def offline(model: str, *, max_model_len: int, memory: float, max_num_seqs: int)
         replies = []
         for a, o in zip(asks, outputs):
             first = o.outputs[0].logprobs[0] if a.choice and o.outputs[0].logprobs else {}
-            probabilities = {p.decoded_token: math.exp(p.logprob) for p in first.values() if p.decoded_token in a.choice}
+            probabilities = {p.decoded_token: math.exp(p.logprob) for p in first.values()
+                             if p.decoded_token in a.choice}
             replies.append(Reply(o.outputs[0].text, o.outputs[0].finish_reason == "stop", probabilities))
         return replies
 
@@ -124,7 +126,8 @@ def ask(server: Server, asks: list[Ask]) -> list[Reply]:
         }
         if a.choice:
             body |= {"logprobs": True, "top_logprobs": len(a.choice) + 5}
-        request = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        request = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                         headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=900) as response:
             choice = json.loads(response.read())["choices"][0]
         probabilities = {}

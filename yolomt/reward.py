@@ -5,15 +5,15 @@
 
 recall, precision and mcq come from `yolomt.facts.score` with Qwen3.5-9B. The two fluency signals are different:
 
-    b(y)    = -(1 / C(y)) sum_i log2 p(y_i | y_<i)       bits per character under the frozen LFM2.5-350M, C(y) characters
+    b(y)    = -(1 / C(y)) sum_i log2 p(y_i | y_<i)       bits per character under the frozen LFM2.5-350M
     fluency = clip((b_shuf - b) / (b_shuf - b05), 0, 1)
     g       = clip((s - 1) / 4, 0, 1) / (1 + e),         e = max(0, r_c - tau_c) + max(0, r_b - tau_b)
 
 b05 is the 5th percentile of b over the teacher's training captions and b_shuf the median b of the same captions with
-their words shuffled (`data/fluency.json`, from `scripts/calibrate.py`). s is the judge's expected 1-5 fluency
-rating (`yolomt.facts.rated`). r_c and r_b count the repeats of content words and of word bigrams (`repeats`), tau_c
-and tau_b their 95th percentiles over the teacher's captions. The gate g scales the factual terms down for list-like
-or repetitive captions, which a gate on b alone does not catch.
+their words shuffled (`data/fluency.json`, from `scripts/calibrate.py`). C(y) counts the characters of y, s is the
+judge's expected 1-5 fluency rating (`yolomt.facts.rated`), r_c and r_b count the repeats of content words and of
+word bigrams (`repeats`), tau_c and tau_b are their 95th percentiles over the teacher's captions. The gate g scales
+the factual terms down for list-like or repetitive captions, which a gate on b alone does not catch.
 
 A caption parses when it is non-empty, has no replacement character and no special token, repeats no word three
 times in a row and has b below b_shuf. A judge reply cut off by its token limit leaves the caption unscored
@@ -40,9 +40,9 @@ from yolomt.facts import Run, rated, score
 SCORER = "LiquidAI/LFM2.5-350M"
 SCORER_REVISION = "9e6c6ccf47cd318696e137d381a7ded8fe4df09f"
 STOPWORDS = frozenset(
-    "a an the and or of in on at to from with by for over under near into onto out up down off is are was were be being "
-    "been its it this that these those there here his her their them they he she we you as while who whom which what "
-    "has have had does do did one two some another other each both very just also then than so".split()
+    "a an the and or of in on at to from with by for over under near into onto out up down off is are was were be "
+    "being been its it this that these those there here his her their them they he she we you as while who whom which "
+    "what has have had does do did one two some another other each both very just also then than so".split()
 )
 
 
@@ -161,7 +161,7 @@ def gate(fluency: Fluency, caption: str, rating: float) -> float:
 
 def rewards(judge: Run, fluency: Fluency, captions: list[str], targets: list[Target], weights: Weights) -> list[Parts]:
     """Reward parts of each caption against its target, in the order of `captions`. The judge is asked only about
-    captions that pass the cheap checks (word budget, `parses`, b < b_shuf); the others get reward 0 and cost no call."""
+    captions that pass the cheap checks (word budget, `parses`, b < b_shuf); the others get reward 0 and no call."""
     ok = [parses(c) and len(c.split()) <= weights.budget for c in captions]
     measured = [i for i, good in enumerate(ok) if good]
     bpcs = dict(zip(measured, bits_per_character(fluency.scorer, [captions[i] for i in measured])))
@@ -173,8 +173,8 @@ def rewards(judge: Run, fluency: Fluency, captions: list[str], targets: list[Tar
         words = len(caption.split())
         if i not in scored:
             fluent = i not in bpcs or bpcs[i] < fluency.b_shuffled
-            out.append(Parts(0.0, 0.0, 0.0, 0.0, bpcs.get(i, 0.0), words, parses(caption) and fluent, words <= weights.budget,
-                             True, 0.0))
+            out.append(Parts(0.0, 0.0, 0.0, 0.0, bpcs.get(i, 0.0), words, parses(caption) and fluent,
+                             words <= weights.budget, True, 0.0))
             continue
         s = scored[i]
         fl = normalized(fluency, bpcs[i])
