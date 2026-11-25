@@ -78,11 +78,6 @@ def interval(estimate: float, resamples: NDArray[np.float64]) -> Interval:
     return Interval(estimate, float(low), float(high))
 
 
-def pooled(v: NDArray[np.float64], sample: Draws) -> Interval:
-    """The interval of a per-question vector over all questions of a benchmark."""
-    return interval(points(v), resampled(v, sample.pooled))
-
-
 def per_task(v: NDArray[np.float64], sample: Draws) -> dict[str, Interval]:
     """The interval of a per-question vector within each task, tasks in sorted order."""
     return {task: interval(points(v[ids]), resampled(v, sample.by_task[task])) for task, ids in sample.members.items()}
@@ -118,9 +113,10 @@ def check() -> None:
     assert sample.pooled.shape == (BOOTSTRAPS, 4) and list(sample.members) == ["a", "b"]
     assert (sample.pooled == np.random.default_rng(SEED).integers(0, 4, size=(BOOTSTRAPS, 4))).all()
     assert all(np.isin(sample.by_task[t], sample.members[t]).all() for t in "ab")
-    assert pooled(one, sample).estimate == 50.0 and pooled(one, sample).low < 50.0 < pooled(one, sample).high
+    alone = contrast({"x": one}, {"x": sample}).benchmarks["x"]
+    assert alone.estimate == 50.0 and alone.low < 50.0 < alone.high
     assert per_task(one, sample) == {"a": Interval(100.0, 100.0, 100.0), "b": Interval(0.0, 0.0, 0.0)}
-    assert pooled(np.zeros(4), sample) == Interval(0.0, 0.0, 0.0)
+    assert contrast({"x": np.zeros(4)}, {"x": sample}).mean == Interval(0.0, 0.0, 0.0)
 
     def vector(*x: float) -> NDArray[np.float64]:
         return np.array(x, dtype=np.float64)
