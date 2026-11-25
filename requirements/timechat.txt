@@ -1,0 +1,15 @@
+# TimeChat-Online-7B runs on its authors' modelling code, transformers 4.50 and flash-attention 2 (their token drop
+# shortens the hidden states and leaves the attention mask at full length): its own environment. After
+# `pip install -r requirements/timechat.txt`, unpack
+#   https://github.com/yaolinli/TimeChat-Online/archive/25a15783a6fd83e3360b3326cee44029fcce0132.tar.gz
+# and put its `eval` folder (the package qwen2_5_vl, which holds the Differential Token Drop) on PYTHONPATH.
+torch==2.6.0
+torchvision==0.21.0
+transformers==4.50.0
+accelerate==1.5.2
+qwen-vl-utils==0.0.10
+numpy==1.26.4
+pillow==11.1.0
+av==14.2.0
+huggingface_hub==0.29.3
+flash-attn @ https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp312-cp312-linux_x86_64.whl

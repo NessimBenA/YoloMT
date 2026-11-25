@@ -89,6 +89,15 @@ def window_of(r: dict[str, Any]) -> Window:
                   target=target, eligible=derived and bool(r["rl_eligible"]))
 
 
+def listed(path: Path) -> dict[tuple[str, int], str]:
+    """The windows of a window list (`data/windows/*.tsv.gz`): each (video id, end second t) with its split."""
+    out: dict[tuple[str, int], str] = {}
+    for line in lines(path)[1:]:
+        _, video_id, split, runs = line.split("\t")
+        out |= {(video_id, int(t)): split for run in runs.split(";") for t in run.split(",")}
+    return out
+
+
 def windows(dirs: list[Path], splits: set[str], *, derived: bool) -> list[Window]:
     """The windows of `splits` under the label roots `dirs`, from the records files or, with `derived`, from the
     derived files."""
