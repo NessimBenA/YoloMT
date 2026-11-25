@@ -1,0 +1,27 @@
+# Mobile-VideoGPT-0.5B runs on its own repository's code, transformers 4.41 and VideoMamba's CUDA kernels: its own
+# environment. After `pip install -r requirements/mobilevgpt.txt`:
+#   1. VideoMamba's fork of mamba and causal-conv1d, built from source with nvcc and gcc present:
+#      MAMBA_FORCE_BUILD=TRUE CAUSAL_CONV1D_FORCE_BUILD=TRUE pip install --no-build-isolation \
+#        "causal-conv1d @ https://github.com/OpenGVLab/VideoMamba/archive/37355c26d0ae99ca2459f6d4044a5f509031a79f.tar.gz#subdirectory=causal-conv1d" \
+#        "mamba-ssm @ https://github.com/OpenGVLab/VideoMamba/archive/37355c26d0ae99ca2459f6d4044a5f509031a79f.tar.gz#subdirectory=mamba"
+#   2. the model's code, unpacked from
+#      https://github.com/Amshaker/Mobile-VideoGPT/archive/c82a4cbc9edcb4eacd6223b4389699f24aca6635.tar.gz
+#      and put on PYTHONPATH (its setup.py leaves out the subpackages, so it is not installed).
+# The code itself fetches OpenGVLab/VideoMamba (videomamba_m16_25M_f8_res224.pth) and openai/clip-vit-base-patch16 from
+# the Hub; the captions of the paper were written with commit 57c216476eefef5ab752ec549e440a49ae4ae5f3 of the latter.
+torch==2.4.1
+torchvision==0.19.1
+transformers==4.41.0
+tokenizers==0.19.1
+huggingface_hub==0.23.5
+safetensors==0.4.5
+numpy==1.26.4
+pillow==10.4.0
+einops==0.8.0
+timm==0.9.16
+opencv-python-headless==4.10.0.84
+av==18.1.0
+setuptools==75.1.0
+wheel==0.44.0
+packaging==24.1
+ninja==1.11.1.1
