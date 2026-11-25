@@ -11,8 +11,12 @@ joined. The frames are the JPEGs of a frame store (`yolomt.data.frame_store`): a
   silent token or an empty turn, so its silent tokens are never written and it writes at least one token.
 - The teacher, Qwen3.8-27B-FP8 under vLLM, answers its labelling prompt (`yolomt.teacher`) on the same frames.
 
-Models of the main environment (requirements.txt) run through `describe`; CUDA_VISIBLE_DEVICES picks the GPU and
-`memory` is the share of its memory vLLM may use.
+Every model runs on one GPU (CUDA_VISIBLE_DEVICES picks it; `memory` is the share of its memory vLLM may use) through
+`describe`. All but three run in the environment of requirements.txt. FastVLM-0.5B, Mobile-VideoGPT-0.5B and
+TimeChat-Online-7B run code that needs older libraries, each in an environment of its own, pinned in
+`requirements/<name>.txt`, which also says where the model's own code comes from: create the environment, install the
+file, put this repository (and that code) on PYTHONPATH and run `scripts/describe.py --model <name>` there. Their
+libraries are imported only when their model is asked for.
 """
 
 from __future__ import annotations
