@@ -24,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 # the teacher, the judges and the reward model run on vLLM
 vllm = ["vllm>=0.30"]
+# the TensorRT engines of deploy/, at the versions the paper's engine was built with
+deploy = ["tensorrt-cu12==10.16.1.11", "onnx==1.23.0"]
 
 [tool.setuptools.packages.find]
 include = ["yolomt*"]
@@ -32,9 +34,9 @@ include = ["yolomt*"]
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
-files = ["yolomt", "scripts"]
+files = ["yolomt", "scripts", "deploy"]
 
-# PyAV's VideoFrame.to_image carries no annotations
+# PyAV's VideoFrame.to_image and torch.cuda.Event carry no annotations
 [[tool.mypy.overrides]]
-module = ["yolomt.video"]
+module = ["yolomt.video", "run"]
 disable_error_code = ["no-untyped-call"]
