@@ -13,10 +13,12 @@ tokens; a window whose greedy caption is not kept is dropped.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, assert_never
 
 import numpy as np
+from numpy.typing import NDArray
 
 from yolomt.video import FPS, SIDE, Decoded, rgb
 
@@ -93,6 +95,29 @@ def grid_span(task: Task, t: int) -> range:
             assert_never(task)
 
 
+def horizon_request(frames: Mapping[int, NDArray[np.uint8]], t: int, *, lookback: int, template: str) -> dict[str, Any]:
+    """vLLM's input for the 16 s view of seconds t - lookback .. t, `frames[s]` being (H, W, 3) uint8: the chat
+    `template` with PROMPT_TEXT replaced, the view and its timing (frames_indices place each frame in the clip) and the
+    pixel budget, which keeps the view's resolution. A lookback of 0 is frame t twice, a second apart: a clip is at
+    least one temporal pair."""
+    t0 = t - lookback
+    if lookback == 0:
+        shown, stamps, span = [t, t], [0, 1], 1
+    else:
+        shown = list(range(t0, t + 1))
+        if len(shown) % 2 == 0:
+            shown.insert(0, t0)
+        stamps, span = [s - t0 for s in shown], lookback
+    text = HORIZON_PROMPT.format(duration=float(span))
+    metadata = {"fps": 1.0, "duration": float(span + 1), "total_num_frames": len(shown), "frames_indices": stamps}
+    # Qwen's resize bounds frames x height x width of the whole clip: the longest view keeps 256 x 256
+    pixels = {"min_pixels": 64 * 32 * 32, "max_pixels": (HORIZON + 3) * SIDE * SIDE}
+    return {"prompt": template.replace("PROMPT_TEXT", text),
+            "multi_modal_data": {"video": (np.stack([frames[s] for s in shown]),
+                                           {**metadata, "video_backend": "pyav", "do_sample_frames": False})},
+            "mm_processor_kwargs": pixels}
+
+
 def request(task: Task, decoded: Decoded, t: int, template: str) -> dict[str, Any]:
     """vLLM's input for the window ending at t: the chat `template` with PROMPT_TEXT replaced, the view and its
     timing (frames_indices place each frame in the clip) and the pixel budget, which keeps the view's resolution."""
@@ -108,15 +133,8 @@ def request(task: Task, decoded: Decoded, t: int, template: str) -> dict[str, An
             pixels = {"min_pixels": 64 * 32 * 32, "max_pixels": 160 * 32 * 32}
         case Horizon():
             t0 = start(task, t)
-            seconds = list(range(t0, t + 1))
-            if len(seconds) % 2 == 0:
-                seconds.insert(0, t0)
-            frames = np.stack([rgb(decoded.student[s]) for s in seconds])
-            text = HORIZON_PROMPT.format(duration=float(t - t0))
-            metadata = {"fps": 1.0, "duration": float(t - t0 + 1), "total_num_frames": len(frames),
-                        "frames_indices": [s - t0 for s in seconds]}
-            # Qwen's resize bounds frames x height x width of the whole clip: the longest view keeps 256 x 256
-            pixels = {"min_pixels": 64 * 32 * 32, "max_pixels": (HORIZON + 3) * SIDE * SIDE}
+            return horizon_request({s: rgb(decoded.student[s]) for s in range(t0, t + 1)}, t, lookback=t - t0,
+                                   template=template)
         case _:
             assert_never(task)
     return {"prompt": template.replace("PROMPT_TEXT", text),
