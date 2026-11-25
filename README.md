@@ -197,7 +197,9 @@ parentheses:
 | no captions | 27.8 (27.8) | 27.2 (27.6) | 33.4 (33.5) | 28.7 (28.7) | 29.3 (29.4) |
 
 The gain from L = 0 is +2.9 [+1.6, +4.2] points (+2.5 [+1.2, +3.7]). Held-out fact-F1, % of the ceiling: OpenVid
-84.0 (83.8) at L = 0 and 92.6 (92.6) at L = 16, test 53.0 (53.3) and 72.1 (71.8). Greedy bf16 decoding differs across
+84.0 (83.8) at L = 0 and 92.6 (92.6) at L = 16, test 53.0 (53.3) and 72.1 (71.8). The controls on dev, at L = 16:
+own past 71.5 (72.2; 52.3 (52.7) at L = 0), current frame repeated 52.1 (52.2), another video's past 19.3 (18.7),
+own past shuffled 70.8 (71.0). Greedy bf16 decoding differs across
 GPUs, so about half of the captions differ in wording from the paper's; the paper measures that re-captioning moves
 the benchmark mean by up to 0.64 points. From the paper's stored captions and answers, the code reproduces every
 accuracy, interval and share of the paper exactly.
