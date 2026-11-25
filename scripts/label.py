@@ -31,7 +31,7 @@ from typing import Any
 from transformers import AutoTokenizer
 
 from yolomt.model import BASE, BASE_REVISION
-from yolomt.teacher import TEACHER, Horizon, Short, Task, grid_span, kept, limits, request, start
+from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, Short, Task, grid_span, kept, limits, request, start
 from yolomt.video import Decoded, archives, decode, fetch, members, video_id_of
 
 
@@ -93,8 +93,9 @@ def main() -> None:
     budget = 2 * limits(task).words
     greedy = SamplingParams(n=1, temperature=0.0, max_tokens=budget)
     sampled = SamplingParams(n=max(1, args.samples), temperature=0.7, top_p=1.0, max_tokens=budget)
-    engine = LLM(model=TEACHER, max_model_len=2048, max_num_seqs=args.max_num_seqs, seed=0,
-                 gpu_memory_utilization=args.gpu_memory_utilization, limit_mm_per_prompt={"video": 1, "image": 0})
+    engine = LLM(model=TEACHER, revision=TEACHER_REVISION, tokenizer_revision=TEACHER_REVISION, max_model_len=2048,
+                 max_num_seqs=args.max_num_seqs, gpu_memory_utilization=args.gpu_memory_utilization, seed=0,
+                 limit_mm_per_prompt={"video": 1, "image": 0})
     template = engine.get_tokenizer().apply_chat_template(
         [{"role": "user", "content": [{"type": "video"}, {"type": "text", "text": "PROMPT_TEXT"}]}],
         tokenize=False, add_generation_prompt=True, enable_thinking=False)

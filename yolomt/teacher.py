@@ -21,6 +21,7 @@ import numpy as np
 from yolomt.video import FPS, SIDE, Decoded, rgb
 
 TEACHER = "Qwen/Qwen3.8-27B-FP8"
+TEACHER_REVISION = "017b9c7af6b5689d5dd426a76e0bc077eb5ca20a"
 SHORT_PROMPT = (
     "This video clip is {duration:.1f} seconds long. Describe what is happening from {a:.1f} to {b:.1f} "
     "seconds, as a live narrator would at the {b:.1f} second mark: the main people, animals or objects, "

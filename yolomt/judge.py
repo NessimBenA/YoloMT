@@ -24,6 +24,7 @@ from yolomt.facts import Ask, Reply, Run
 
 QWEN = "Qwen/Qwen3.5-9B"
 HELD_OUT = "microsoft/phi-4"
+REVISIONS = {QWEN: "c202236235762e1c871ad0ccb60c8ee5ba337b9a", HELD_OUT: "2db69c1c3e91a05d2c64a3185acfbaf36f744e25"}
 NO_THINKING: dict[str, Any] = {"enable_thinking": False}
 
 
@@ -46,8 +47,8 @@ def offline(model: str, *, max_model_len: int, memory: float, max_num_seqs: int)
     from vllm import LLM, SamplingParams
     from vllm.sampling_params import StructuredOutputsParams
 
-    llm = LLM(model=model, max_model_len=max_model_len, gpu_memory_utilization=memory, max_num_seqs=max_num_seqs,
-              language_model_only=True, seed=0)
+    llm = LLM(model=model, revision=REVISIONS[model], tokenizer_revision=REVISIONS[model], max_model_len=max_model_len,
+              gpu_memory_utilization=memory, max_num_seqs=max_num_seqs, language_model_only=True, seed=0)
 
     def run(asks: list[Ask]) -> list[Reply]:
         if not asks:
@@ -87,9 +88,9 @@ def reap(group: int) -> None:
 
 def launch(plan: Plan, *, device: str, log: str) -> Server:
     """`vllm serve` on GPU `device`; it opens its port once the model is loaded."""
-    command = ["vllm", "serve", plan.model, "--port", str(plan.port), "--max-model-len", str(plan.max_model_len),
-               "--gpu-memory-utilization", str(plan.memory), "--max-num-seqs", str(plan.max_num_seqs),
-               "--language-model-only", "--seed", "0"]
+    command = ["vllm", "serve", plan.model, "--revision", REVISIONS[plan.model], "--port", str(plan.port),
+               "--max-model-len", str(plan.max_model_len), "--gpu-memory-utilization", str(plan.memory),
+               "--max-num-seqs", str(plan.max_num_seqs), "--language-model-only", "--seed", "0"]
     if plan.max_num_batched_tokens is not None:
         command += ["--max-num-batched-tokens", str(plan.max_num_batched_tokens)]
     process = subprocess.Popen(command, stdout=open(log, "ab"), stderr=subprocess.STDOUT, start_new_session=True,
