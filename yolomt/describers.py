@@ -21,15 +21,15 @@ import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from importlib import metadata
-from itertools import batched
+from itertools import batched, product
 from pathlib import Path
 from typing import Any, assert_never
 
 import torch
 from PIL import Image
 
-from yolomt.bench import HORIZON
-from yolomt.data import FrameStore, image
+from yolomt.bench import HORIZON, frame_names, read_requests
+from yolomt.data import FrameStore, assert_stored, frame_name, frame_store, image, listed, windows
 from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, horizon_request, limits
 
 MAX_NEW = 80
@@ -372,6 +372,7 @@ def describe(model: Describer, store: FrameStore, clips: Sequence[tuple[str, ...
              memory: float) -> list[Generated]:
     """The caption of each clip, in order; clips[i] holds the store names of its K + 1 frames, oldest first. The
     clips of one K go through the model together, `model.chunk` at a time."""
+    assert_stored(store, [name for names in clips for name in names])
     generate = engine(model, memory=memory)
     done: dict[int, Generated] = {}
     for loops in sorted({len(names) - 1 for names in clips}):
@@ -400,6 +401,29 @@ def fields(name: str, model: Describer, one: Generated) -> dict[str, Any]:
     kept = {} if one.visual is None else {"visual_kept": one.visual[0], "visual_total": one.visual[1]}
     return {"caption": one.text, "finish": one.finish, "prompt_tokens": one.prompt_tokens, "model": name,
             "wording": wording, **kept}
+
+
+def bench_rows(name: str, model: Describer, folder: Path, *, loops: int | None,
+               memory: float) -> list[dict[str, Any]]:
+    """The record of each request of a benchmark folder, in the order of its requests.jsonl; loops: the lookback K
+    capped at each request's own, or None for the request's own (the protocol)."""
+    requests = read_requests(folder / "requests.jsonl")
+    clips = [frame_names(request, loops=loops) for request in requests]
+    made = describe(model, frame_store([folder]), clips, memory=memory)
+    return [{"video": request.video, "t": request.t, "loops": len(names) - 1, **fields(name, model, one)}
+            for request, names, one in zip(requests, clips, made, strict=True)]
+
+
+def window_rows(name: str, model: Describer, listing: Path, labels: list[Path], *, loops: Sequence[int],
+                memory: float) -> list[dict[str, Any]]:
+    """The record of each window of a window list that the label roots hold, at each lookback in `loops`."""
+    wanted = listed(listing)
+    items = [w for w in windows(labels, set(wanted.values()), derived=False) if w.key in wanted]
+    assert items, f"the label roots hold no window of {listing}"
+    pairs = list(product(items, loops))
+    clips = [tuple(frame_name(w.video_id, w.t1 - j) for j in range(k, -1, -1)) for w, k in pairs]
+    made = describe(model, frame_store(labels), clips, memory=memory)
+    return [{"key": w.key, "loops": k, **fields(name, model, one)} for (w, k), one in zip(pairs, made, strict=True)]
 
 
 def provenance() -> dict[str, Any]:
