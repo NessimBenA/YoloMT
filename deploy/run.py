@@ -538,7 +538,7 @@ def micro(w: Writer, past: list[torch.Tensor], now: torch.Tensor, *, repeats: in
     return Micro(vision=vision, chunks=chunks, step=stat(steps))
 
 
-def row_of(w: Writer, loops: int, clips: dict[str, Streamed], micro: Micro) -> Row:
+def row_of(w: Writer, loops: int, clips: dict[str, Streamed], measured: Micro) -> Row:
     steady = {name: [f for f in c.frames[FPS:] if f.loops == loops] for name, c in clips.items()}
     steady = {name: frames for name, frames in steady.items() if frames}
     worst = max(steady, key=lambda name: stat([f.events_ms for f in steady[name]]).p99_ms)
@@ -549,8 +549,8 @@ def row_of(w: Writer, loops: int, clips: dict[str, Streamed], micro: Micro) -> R
 
     done = [c for clip in clips.values() for c in clip.captions if c.loops == loops]
     tokens = float(np.mean([c.tokens for c in done])) if done else None
-    gpu = None if tokens is None else (micro.vision.p50_ms + sum(s.p50_ms for s in micro.chunks[loops])
-                                       + micro.step.p50_ms * tokens) / 1e3
+    gpu = None if tokens is None else (measured.vision.p50_ms + sum(s.p50_ms for s in measured.chunks[loops])
+                                       + measured.step.p50_ms * tokens) / 1e3
     return Row(loops=loops, prompt=len(w.runtime.prompts[loops].embeds), chunks=w.runtime.prompts[loops].chunks,
                worst_clip=worst, frame=of("tick", "prefill", "other"), tick=of("tick"), prefill=of("prefill"),
                other=of("other"), captions=len(done), abandoned=sum(c.abandoned.get(loops, 0) for c in clips.values()),
@@ -657,7 +657,8 @@ def main() -> None:
     for name in ("timing", "serve", "stream"):
         command = commands.add_parser(name)
         command.add_argument("--engines", type=Path, required=True, help="the folder deploy/engine.py built")
-        command.add_argument("--out", type=Path, help="timing: the report's JSON; serve: a folder; stream: its JSON")
+        command.add_argument("--out", type=Path, required=name != "timing",
+                             help="timing: the report's JSON; serve: a folder; stream: its JSON")
         if name == "timing":
             command.add_argument("--clips", nargs="+", choices=CLIPS, default=list(CLIPS))
             command.add_argument("--loops", type=int, nargs="+", help="the L the ticks cycle through, default all")
@@ -676,10 +677,8 @@ def main() -> None:
             if args.out is not None:
                 args.out.write_text(json.dumps(asdict(report), indent=2))
         case "serve":
-            assert args.out is not None, "serve writes into a folder: --out"
             serve(args.engines, streams=args.streams, loops=args.loops, aligned=args.aligned, out=args.out)
         case _:
-            assert args.out is not None, "stream writes its JSON: --out"
             played = play(args.engines, index=args.index, streams=args.streams, loops=args.loops,
                           aligned=args.aligned, barrier=args.barrier)
             args.out.write_text(json.dumps(asdict(played), indent=2))
