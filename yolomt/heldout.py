@@ -64,6 +64,8 @@ class Claim:
 
 @dataclass(frozen=True)
 class Ceiling:
+    """The teacher's own caption (sample 0) and the leave-one-out target it is scored against."""
+
     caption: str
     target: Target
 
@@ -106,6 +108,8 @@ class Ratio:
 
 @dataclass(frozen=True)
 class Interval:
+    """A difference of shares in points, and the 2.5th and 97.5th percentiles of its resamples."""
+
     estimate: float
     low: float
     high: float
@@ -118,16 +122,20 @@ class Own:
 
 @dataclass(frozen=True)
 class Repeated:
-    pass
+    """Frame t as each past frame."""
 
 
 @dataclass(frozen=True)
 class Foreign:
+    """The past of a partner window of another video."""
+
     seed: int
 
 
 @dataclass(frozen=True)
 class Shuffled:
+    """Its own past in another order."""
+
     seed: int
 
 
