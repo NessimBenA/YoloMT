@@ -1,0 +1,14 @@
+{
+ "scorer": "LiquidAI/LFM2.5-350M",
+ "captions": 20000,
+ "device": "cuda",
+ "p05": 0.9339111317196399,
+ "median": 1.1596155100994854,
+ "p95": 1.4581459239973409,
+ "shuffled_p05": 3.138653614855842,
+ "shuffled_median": 3.724974701430039,
+ "shuffled_p95": 4.381312204525105,
+ "stutter_rate": 5e-05,
+ "content_repeats_p95": 5,
+ "bigram_repeats_p95": 3
+}
