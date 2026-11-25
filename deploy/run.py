@@ -67,6 +67,7 @@ from yolomt.graphs import DECODE, EXTEND, Runtime, load_runtime
 from yolomt.model import BASE, BASE_REVISION, POOLED, SIDE, TOKENS, Pooler
 
 FPS = 30
+# the deployed schedule: decode steps per frame, and frames from a tick to its first prefill chunk
 STEPS = 4
 OFFSET = 1
 BUDGET_MS = 16.0
@@ -74,8 +75,10 @@ VIDEOS = "raushan-testing-hf/videos-test"
 VIDEOS_REVISION = "4cba700bd771f44d72b549253da025c32e944d42"
 CLIPS = ("Big_Buck_Bunny_720_10s_10MB.mp4", "karate.mp4", "Cooking_cake.mp4")
 STREAM_CLIP = "Cooking_cake.mp4"
+# stream i starts STREAM_SKIP i frames into the clip and plays STREAM_SECONDS + L seconds
 STREAM_SKIP = 300
 STREAM_SECONDS = 60
+# decode steps between two reads of the history when `caption` writes a caption to its end
 EVAL_STEPS = 8
 TORCH = {trt.float16: torch.float16, trt.float32: torch.float32, trt.uint8: torch.uint8, trt.int64: torch.int64}
 
@@ -123,12 +126,11 @@ class Writer:
 
 @dataclass(frozen=True)
 class Progress:
-    """The first `count` tokens written (1 after the prefill); ids: those before <|im_end|>; ended: <|im_end|> is among
-    them; done: ended, or the caption reached its limit."""
+    """The first `count` tokens written (1 after the prefill); ids: those before <|im_end|>; done: <|im_end|> is among
+    them or the caption reached its limit."""
 
     count: int
     done: bool
-    ended: bool
     ids: list[int]
 
 
@@ -416,8 +418,8 @@ def progress(w: Writer, count: int) -> Progress:
     """After a synchronisation: the first `count` tokens of the history, cut at <|im_end|>."""
     ids = w.history[:count].tolist()
     if w.runtime.im_end in ids:
-        return Progress(count=count, done=True, ended=True, ids=ids[:ids.index(w.runtime.im_end)])
-    return Progress(count=count, done=count >= w.runtime.written, ended=False, ids=ids)
+        return Progress(count=count, done=True, ids=ids[:ids.index(w.runtime.im_end)])
+    return Progress(count=count, done=count >= w.runtime.written, ids=ids)
 
 
 def text(w: Writer, ids: list[int]) -> str:
