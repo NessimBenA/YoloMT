@@ -30,6 +30,7 @@ from typing import Any, assert_never
 import numpy as np
 import torch
 from PIL import Image
+from torch.nn.functional import pad
 
 from yolomt.bench import HORIZON, frame_names, read_requests
 from yolomt.data import FrameStore, assert_stored, frame_name, frame_store, image, listed, windows
@@ -428,11 +429,11 @@ def timechat_engine(model: Baseline) -> Engine:
         count, longest = len(done), max(d.cache[0][0].shape[2] for d in done)
         padding = [longest - d.cache[0][0].shape[2] for d in done]
         layers = tuple(
-            (torch.cat([torch.nn.functional.pad(d.cache[layer][0], (0, 0, pad, 0)) for d, pad in zip(done, padding, strict=True)]),
-             torch.cat([torch.nn.functional.pad(d.cache[layer][1], (0, 0, pad, 0)) for d, pad in zip(done, padding, strict=True)]))
+            (torch.cat([pad(d.cache[layer][0], (0, 0, n, 0)) for d, n in zip(done, padding, strict=True)]),
+             torch.cat([pad(d.cache[layer][1], (0, 0, n, 0)) for d, n in zip(done, padding, strict=True)]))
             for layer in range(len(done[0].cache)))
         cache = DynamicCache.from_legacy_cache(layers)  # type: ignore[attr-defined]
-        mask = torch.stack([torch.arange(longest, device=net.device) >= pad for pad in padding]).long()
+        mask = torch.stack([torch.arange(longest, device=net.device) >= n for n in padding]).long()
         seen = torch.stack([d.seen for d in done])
         position = torch.tensor([d.position for d in done], device=net.device)
         token = torch.tensor([d.first for d in done], device=net.device)
