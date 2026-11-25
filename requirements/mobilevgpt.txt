@@ -8,7 +8,7 @@
 #      https://github.com/Amshaker/Mobile-VideoGPT/archive/c82a4cbc9edcb4eacd6223b4389699f24aca6635.tar.gz
 #      and put on PYTHONPATH (its setup.py leaves out the subpackages, so it is not installed).
 # The code itself fetches OpenGVLab/VideoMamba (videomamba_m16_25M_f8_res224.pth) and openai/clip-vit-base-patch16 from
-# the Hub; the captions of the paper were written with commit 57c216476eefef5ab752ec549e440a49ae4ae5f3 of the latter.
+# the Hub, at their current commits: it offers no way to pin them.
 torch==2.4.1
 torchvision==0.19.1
 transformers==4.41.0
