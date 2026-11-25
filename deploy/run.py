@@ -190,9 +190,9 @@ class Micro:
 
 @dataclass(frozen=True)
 class Row:
-    """One L over the clips: the worst clip's time per frame (all frames, then the vision ticks, the prefill chunks'
-    frames and the others); the completed captions' mean lag in frames and mean length over every clip; GPU seconds
-    per caption (None when no caption completed)."""
+    """One L over the clips that reach it with a frame after the first second: the worst clip's time per frame (all
+    frames, then the vision ticks, the prefill chunks' frames and the others); the completed captions' mean lag in
+    frames and mean length over those clips; GPU seconds per caption (None when no caption completed)."""
 
     loops: int
     prompt: int
@@ -547,13 +547,14 @@ def row_of(w: Writer, loops: int, clips: dict[str, Streamed], measured: Micro) -
     def of(*kinds: str) -> Stat:
         return stat([f.events_ms for f in frames if f.kind in kinds])
 
-    done = [c for clip in clips.values() for c in clip.captions if c.loops == loops]
+    done = [c for name in steady for c in clips[name].captions if c.loops == loops]
+    dropped = sum(clips[name].abandoned.get(loops, 0) for name in steady)
     tokens = float(np.mean([c.tokens for c in done])) if done else None
     gpu = None if tokens is None else (measured.vision.p50_ms + sum(s.p50_ms for s in measured.chunks[loops])
                                        + measured.step.p50_ms * tokens) / 1e3
     return Row(loops=loops, prompt=len(w.runtime.prompts[loops].embeds), chunks=w.runtime.prompts[loops].chunks,
                worst_clip=worst, frame=of("tick", "prefill", "other"), tick=of("tick"), prefill=of("prefill"),
-               other=of("other"), captions=len(done), abandoned=sum(c.abandoned.get(loops, 0) for c in clips.values()),
+               other=of("other"), captions=len(done), abandoned=dropped,
                lag_frames=float(np.mean([c.lag for c in done])) if done else None, tokens=tokens, gpu_seconds=gpu)
 
 
