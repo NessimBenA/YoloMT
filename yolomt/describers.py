@@ -418,7 +418,7 @@ def window_rows(name: str, model: Describer, listing: Path, labels: list[Path], 
                 memory: float) -> list[dict[str, Any]]:
     """The record of each window of a window list that the label roots hold, at each lookback in `loops`."""
     wanted = listed(listing)
-    items = [w for w in windows(labels, set(wanted.values()), derived=False) if w.key in wanted]
+    items = [w for w in windows(labels, set(wanted.values()), derived=False) if (w.video_id, w.t1) in wanted]
     assert items, f"the label roots hold no window of {listing}"
     pairs = list(product(items, loops))
     clips = [tuple(frame_name(w.video_id, w.t1 - j) for j in range(k, -1, -1)) for w, k in pairs]
