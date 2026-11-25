@@ -25,6 +25,7 @@ from itertools import batched, product
 from pathlib import Path
 from typing import Any, assert_never
 
+import numpy as np
 import torch
 from PIL import Image
 
@@ -33,6 +34,7 @@ from yolomt.data import FrameStore, assert_stored, frame_name, frame_store, imag
 from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, horizon_request, limits
 
 MAX_NEW = 80
+MOBILEVGPT_FRAMES = 16
 FASTVLM_IMAGE_TOKEN = -200  # IMAGE_TOKEN_INDEX of the model's remote code: its input ids hold one per image
 LIBRARIES = ("torch", "transformers", "vllm", "timm", "flash-attn", "qwen-vl-utils", "mamba-ssm", "causal-conv1d")
 
@@ -88,13 +90,20 @@ class Transformers:
 
 
 @dataclass(frozen=True)
+class MobileVideoGpt:
+    """Mobile-VideoGPT under its own repo's modelling code and the library versions of
+    `requirements/mobilevgpt.txt`. It always reads MOBILEVGPT_FRAMES frames as one video, so the K + 1 frames are
+    resampled to them (`mobilevgpt_frames`)."""
+
+
+@dataclass(frozen=True)
 class FastVlm:
     """FastVLM under its Hugging Face remote code and the library versions of `requirements/fastvlm.txt`, one clip at a
     time (a batch changes its float16 results). The code takes one <image> placeholder per image, so the K + 1 frames
     are K + 1 placeholders in the one user turn."""
 
 
-Backend = Vllm | Transformers | FastVlm
+Backend = Vllm | Transformers | MobileVideoGpt | FastVlm
 
 
 @dataclass(frozen=True)
@@ -168,6 +177,8 @@ DESCRIBERS: dict[str, Teacher | Baseline] = {
                           Vllm()),
     "streamingvlm-7b": Baseline("mit-han-lab/StreamingVLM", "7ac1cef46d20432053a9814838760318cb26b348", Plain(),
                                 Images(), Vllm(silent=("...", " ...", "…"), minimum=1, penalty=1.05)),
+    "mobilevgpt-0.5b": Baseline("Amshaker/Mobile-VideoGPT-0.5B", "4eb2062cbe7de1a4397d0e6d02df4c52b947302b", Facts(),
+                                Video(), MobileVideoGpt(), Half(), chunk=16),
     "fastvlm-0.5b": Baseline("apple/FastVLM-0.5B", "16375720c2d673fa583e57e9876afde27549c7d0", Live(), Images(),
                              FastVlm(), Half(), chunk=1),
     "teacher27b": Teacher(TEACHER, TEACHER_REVISION),
@@ -334,6 +345,70 @@ def transformers_engine(model: Baseline) -> Engine:
     return generate
 
 
+def mobilevgpt_frames(count: int) -> list[int]:
+    """Indices into a clip's `count` = K + 1 frames, oldest first, of the MOBILEVGPT_FRAMES frames Mobile-VideoGPT
+    reads: round(i K / 15) for i = 0 .. 15. The oldest and the current frame are always in; for K < 15 frames repeat in
+    time order (K = 0: frame t sixteen times), for K = 16 the frame t - 8 is skipped."""
+    return [int(i) for i in np.rint(np.linspace(0, count - 1, MOBILEVGPT_FRAMES))]
+
+
+def mobilevgpt_engine(model: Baseline) -> Engine:
+    """Mobile-VideoGPT as its README and `mobilevideogpt.utils.preprocess_input` run it: the Qwen2 chat template with
+    <image> once per frame, VideoMamba's and CLIP's own processors on the frames `mobilevgpt_frames` picks (the model
+    keeps 8 of its 16 frames itself, by attention), the checkpoint's own repetition penalty. `generate` runs in its two
+    steps (visual tokens, then decoding) to read the length of the input embeddings as the prompt's. The clips of a call
+    have one prompt, so they need no padding."""
+    from mamba_ssm.ops import selective_scan_interface
+    from mobilevideogpt.constants import DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
+    from mobilevideogpt.conversation import conv_templates
+    from mobilevideogpt.mm_utils import tokenizer_image_token
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+    from transformers.generation.utils import GenerationMixin
+
+    assert hasattr(selective_scan_interface, "mamba_inner_fn_no_out_proj"), "mamba_ssm is not VideoMamba's fork"
+    dtype = dtype_of(model.precision)
+    config = AutoConfig.from_pretrained(model.repo, revision=model.revision)
+    tokenizer = AutoTokenizer.from_pretrained(model.repo, revision=model.revision, use_fast=False)
+    net = AutoModelForCausalLM.from_pretrained(model.repo, revision=model.revision, config=config, torch_dtype=dtype)
+    net = net.to("cuda")  # type: ignore[arg-type]
+    video_tower = net.get_vision_tower()
+    video_tower.load_model(net.config.mm_vision_tower)
+    image_tower = net.get_image_vision_tower()
+    image_tower.load_model()
+    stops = torch.tensor(net.generation_config.eos_token_id, device="cuda")
+
+    def pixels(clip: torch.Tensor) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+        arrays = clip.permute(0, 2, 3, 1).contiguous().numpy()
+        picked = mobilevgpt_frames(len(clip))
+        video = video_tower.image_processor.preprocess([arrays[i] for i in picked])["pixel_values"]
+        context = [image_tower.image_processor.preprocess(arrays[i], return_tensors="pt")["pixel_values"][0]
+                   for i in picked]
+        return video, context
+
+    @torch.inference_mode()
+    def generate(clips: torch.Tensor) -> list[Generated]:
+        conv = conv_templates["qwen2_instruct"].copy()
+        text = instruction(model.wording, loops=clips.shape[1] - 1)
+        conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN * MOBILEVGPT_FRAMES + "\n" + text)
+        conv.append_message(conv.roles[1], None)
+        ids = tokenizer_image_token(conv.get_prompt(), tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
+        seen = [pixels(clip) for clip in clips]
+        video = torch.stack([t for v, _ in seen for t in v]).to("cuda", dtype)
+        context = torch.stack([t for _, c in seen for t in c]).to("cuda", dtype)
+        _, mask, _, embeds, _ = net.prepare_inputs_labels_for_multimodal(
+            ids.unsqueeze(0).expand(len(seen), -1).to("cuda"), None, None, None, video, context)
+        made = GenerationMixin.generate(net, inputs_embeds=embeds, attention_mask=mask, do_sample=False, num_beams=1,
+                                        temperature=None, top_p=None, top_k=None, max_new_tokens=MAX_NEW,
+                                        use_cache=True)
+        assert isinstance(made, torch.Tensor)
+        replies = tokenizer.batch_decode(made, skip_special_tokens=True)
+        return [Generated(reply.strip().removesuffix(conv.sep).strip(),
+                          "stop" if bool(torch.isin(row, stops).any()) else "length", int(embeds.shape[1]))
+                for row, reply in zip(made, replies, strict=True)]
+
+    return generate
+
+
 def fastvlm_engine(model: Baseline) -> Engine:
     """FastVLM as its model card runs it: the chat template rendered to a string, the text around each <image> tokenized
     without special tokens with the image token id spliced in, pixel values from the model's own image processor (a
@@ -398,6 +473,8 @@ def baseline_engine(model: Baseline, *, memory: float) -> Engine:
             return vllm_engine(model, backend, memory=memory)
         case Transformers():
             return transformers_engine(model)
+        case MobileVideoGpt():
+            return mobilevgpt_engine(model)
         case FastVlm():
             return fastvlm_engine(model)
         case _:
