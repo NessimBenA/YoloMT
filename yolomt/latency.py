@@ -100,14 +100,14 @@ class Yolo:
 Subject = Yolo | Baseline
 
 BASELINES = {
-    "lfm2.5-vl-450m": Baseline("LiquidAI/LFM2.5-VL-450M", "fc6221ca597f3315e4f82fc2df606783267b34ba", Lfm()),
-    "lfm2.5-vl-1.6b": Baseline("LiquidAI/LFM2.5-VL-1.6B", "919fde3d022e3f90a4716006f993938ee8c2eb97", Lfm()),
+    "lfm25-vl-450m": Baseline("LiquidAI/LFM2.5-VL-450M", "fc6221ca597f3315e4f82fc2df606783267b34ba", Lfm()),
+    "lfm25-vl-1.6b": Baseline("LiquidAI/LFM2.5-VL-1.6B", "919fde3d022e3f90a4716006f993938ee8c2eb97", Lfm()),
     "smolvlm2-500m": Baseline("HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
                               "7b375e1b73b11138ff12fe22c8f2822d8fe03467", Smol()),
     "smolvlm2-2.2b": Baseline("HuggingFaceTB/SmolVLM2-2.2B-Instruct", "482adb537c021c86670beed01cd58990d01e72e4",
                               Smol()),
-    "internvl3.5-1b": Baseline("OpenGVLab/InternVL3_5-1B-HF", "9191dbccf312b537016f041b25d61c72e7c5c9f3", Intern()),
-    "internvl3.5-2b": Baseline("OpenGVLab/InternVL3_5-2B-HF", "3f301ffcf3dcbb47893afae6650ea3e78d96fb6d", Intern()),
+    "internvl35-1b": Baseline("OpenGVLab/InternVL3_5-1B-HF", "9191dbccf312b537016f041b25d61c72e7c5c9f3", Intern()),
+    "internvl35-2b": Baseline("OpenGVLab/InternVL3_5-2B-HF", "3f301ffcf3dcbb47893afae6650ea3e78d96fb6d", Intern()),
     "qwen3-vl-2b": Baseline("Qwen/Qwen3-VL-2B-Instruct", "89644892e4d85e24eaac8bacfd4f463576704203", Qwen()),
     "qwen3-vl-4b": Baseline("Qwen/Qwen3-VL-4B-Instruct", "ebb281ec70b05090aa6165b016eac8ec08e71b17", Qwen()),
 }

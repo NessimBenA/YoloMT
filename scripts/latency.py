@@ -1,7 +1,7 @@
 """Time a captioner's eager FP16 latency on one GPU at lookbacks L (the paper's timing table).
 
     python scripts/latency.py --model yolomt --weights Nessim/YoloMT --out runs/latency/yolomt.json
-    python scripts/latency.py --model lfm2.5-vl-450m --out runs/latency/lfm2.5-vl-450m.json
+    python scripts/latency.py --model lfm25-vl-450m --out runs/latency/lfm25-vl-450m.json
 
 The models are YoloMT and the transformers baselines of the table. Mobile-VideoGPT and FastVLM run their own
 repositories' code under older library versions and are not here. Windows, prompt, lengths and what is timed are in
