@@ -122,6 +122,8 @@ class Span:
 
 @dataclass(frozen=True)
 class OvoJob:
+    """One video of the OVO-Bench tar: its path, the parts, its member's span in them and its query seconds."""
+
     video: str
     parts: tuple[Path, ...]
     span: Span
@@ -208,6 +210,8 @@ class MvResult:
 
 @dataclass(frozen=True)
 class StreamJob:
+    """One StreamingBench video: its zip, its member and its query seconds."""
+
     archive: Path
     member: str
     times: tuple[int, ...]
@@ -223,6 +227,8 @@ class VmmeJob:
 
 @dataclass(frozen=True)
 class VmmeResult:
+    """frames: second -> JPEG of the seconds the video's tiled requests read."""
+
     video: str
     clip: Clip
     frames: dict[int, bytes]
@@ -666,8 +672,31 @@ def read_pins(path: Path) -> dict[str, Pin]:
     return {name: Pin(**pin) for name, pin in json.loads(path.read_text()).items()}
 
 
+def check() -> None:
+    """Hand-computed values on tiny fixed inputs; runs at every build."""
+    assert seconds_of((40, 3)) == {0, 1, 2, 3, *range(24, 41)} and seconds_read((Request("v", 5, 2),)) == {3, 4, 5}
+    assert named("v", {3: b"x"}) == {"v/3.jpg": b"x"}
+    assert contiguous({0, 1, 2, 3}, first=0, stop=3.2, video="v") == Clip(0, 3)
+    assert contiguous({2, 3, 4, 6}, first=2, stop=5, video="v") == Clip(2, 4)
+    assert options_of(["A. x", "B. y. z"], key="k") == ("x", "y. z")
+    row = {"question_id": "Real-Time Visual Understanding_sample_332_4"}
+    assert streaming_video(row) == "streaming/sample_332" and streaming_key(row) == "streaming/sample_332_4"
+    ovo = {"id": 7, "task": "OCR", "video": "A/1.mp4", "realtime": 12.9, "question": "Q?", "options": ["x", "y"],
+           "gt": 1}
+    expected = Question("ovo/7", "ovo", "OCR", "ovo/A/1", 0, "Q?", ("x", "y"), 1, (Request("ovo/A/1", 12, 12),))
+    assert ovo_questions([ovo], effective={"A/1.mp4": {12: 12}}) == [expected]
+    assert ovo_questions([ovo], effective={"A/1.mp4": {12: 9}})[0].captions == (Request("ovo/A/1", 9, 9),)
+    row["time_stamp"], row["task_type"], row["question"] = "00:01:05", "Counting", "Q?"
+    row["options"], row["answer"] = "['A. x', 'B. y']", "B"
+    kept = streaming_questions([row], effective={"streaming/sample_332": {65: 60}})
+    assert kept == [Question("streaming/sample_332_4", "streaming", "Counting", "streaming/sample_332", 0, "Q?",
+                             ("x", "y"), 1, (Request("streaming/sample_332", 60, 16),))]
+    assert streaming_questions([row], effective={"streaming/sample_332": {}}) == []
+
+
 def build(benchmark: Name, *, pins: Path, out: Path, scratch: Path, workers: int) -> None:
     """Downloads into `scratch` (archives are deleted once decoded), decodes with `workers` processes, writes `out`."""
+    check()
     pin = read_pins(pins)[benchmark]
     match benchmark:
         case "ovo":
