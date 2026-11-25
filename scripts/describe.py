@@ -49,9 +49,9 @@ def main() -> None:
         rows = window_rows(args.model, model, args.windows, args.labels, loops=[int(k) for k in args.loops],
                            memory=args.memory)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    settings = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()} | {"describer": asdict(model)}
+    settings = {**vars(args), "describer": asdict(model)}
     with args.out.with_suffix(".run.json").open("x") as handle:
-        handle.write(json.dumps({"settings": settings, **provenance()}, indent=2) + "\n")
+        handle.write(json.dumps({"settings": settings, **provenance()}, indent=2, default=str) + "\n")
     with args.out.open("x") as handle:
         handle.write("".join(json.dumps(row) + "\n" for row in rows))
 
