@@ -1,0 +1,64 @@
+{
+ "ovo": {
+  "repo": "JoeLeelyf/OVO-Bench",
+  "revision": "fec29e3385747b5642d995370143ba92d2819bd2",
+  "annotations": {
+   "https://raw.githubusercontent.com/JoeLeelyf/OVO-Bench/c34093f9a072d93f9e1c6b923446dfba71f4528e/data/ovo_bench_new.json": "dc4a90daf26764dc8ab8b228ea4af864ba2ea50c2833ead8c9af6573f78ccf97"
+  },
+  "keys": "6f27fbfba8baa0bb57164b06eab4d53743b3f0c8454466ad6333d375ddd1fca2",
+  "questions": "3c6dd74e7dbc720e9bc377280dde2593f61209850fcb8ceb92587625eb3d341a",
+  "requests": "2d0837d92b45c82f1ba342b50945e1edbc38246bd1c693f38a05f4adf71a3642",
+  "frames": "32014c07b8dacb3159af5c67d71cc3fcddaee21668671b1f1ba5a5aa44380297"
+ },
+ "mvbench": {
+  "repo": "OpenGVLab/MVBench",
+  "revision": "230a2d4fac8900333c61754641c7a13e069ac9c6",
+  "annotations": {
+   "json/action_antonym.json": "0ebbec1f540f598a82bf27f569e7377fdc5c4b6e62d53d3847a88abb785f5513",
+   "json/action_count.json": "5e3389d3f8a81744096825d735d45d04b1842fb49da7f5b9a70d4c2224505117",
+   "json/action_localization.json": "164290bb5f447b6cdff26eb51a2470bcf4ce31f84d092ec4337f7bd4ce558eec",
+   "json/action_prediction.json": "15601d39ca8604dbb642149c097f416518f4816b0c0bec57a6202d95f8bdac79",
+   "json/action_sequence.json": "d5f8c063a5ae5a433c3fb8ff78a03acbf0513a01928b384ed90a1e044adf230e",
+   "json/character_order.json": "72c20ad5749da31759c92f4ed83ed117a52f70963ce1d85d5dfd1582accdead4",
+   "json/counterfactual_inference.json": "6fabbbaba68b10b48bfb714c51b87569266bc65303530e5ab9c39cab2924bdfa",
+   "json/egocentric_navigation.json": "4a5f80cca3471a15efe6d7d4ded192218871992cab32fa3a3eede93ea7fb3972",
+   "json/episodic_reasoning.json": "39ca717f721c274a20835835e4ca417f58d5fb2d17ffebb7042d373561c871c3",
+   "json/fine_grained_action.json": "21fb61328ab02e399170a22a2a4080a05dff18e8423de709e49b9fa2180fde58",
+   "json/moving_attribute.json": "b760214e4320b2ceed4580cc0febfc8c8b084487c7efcaef712b704adb850548",
+   "json/moving_count.json": "a561538a69b2722c96d2b608af488c04db6a0d803b03b49661b8834e9425d245",
+   "json/moving_direction.json": "81379646d91fb078a8b38de897f40977eeeebd946ca1c6ef0f58e4bde9d21209",
+   "json/object_existence.json": "2bb290258243c7dafe57042768d491e6a239d30d0ff74d0f163a989c60f69620",
+   "json/object_interaction.json": "9624cf2fef5ad4ec882edf955ce1d10c806e71e4e8c6a880fd867b224914302b",
+   "json/object_shuffle.json": "f9e1bd17a9bbab1d9f5be71411ca619cf9743ca47bb808985b202138b7928118",
+   "json/scene_transition.json": "edab8a7992851061cac170f7e50782961ec21826f99e70ee72ae73a9dafb79f9",
+   "json/state_change.json": "21fa00a1e4fdbd3a0fda4d04f1b4dfd8ee62a1e3f3663fdb0f6e40799c36027f",
+   "json/unexpected_action.json": "76b6f440ccb1ed007c67236c0ec7a39ee7cfbfb04197e9cc4a303b9230ca958b"
+  },
+  "keys": "01d22d125a8a258feed2b6ac45796d728b226ce2a65ce673cc5b63111c9d0c59",
+  "questions": "5c8fc8417dc67179c4b0e3db42847adc2a4a25dde87dd479b3e161e652f91b8d",
+  "requests": "7c7c95c61bca9e5325340701cdd3d09d30c8e4bda1ef4432663d27695c8a96dd",
+  "frames": "c5e6dde136066e297920a4da1e8fc53126f4d739700e125d027c67c9b44aa234"
+ },
+ "streaming": {
+  "repo": "mjuicem/StreamingBench",
+  "revision": "48872fa707124474ce4c5172ddc58efb8bc88058",
+  "annotations": {
+   "StreamingBench/Real_Time_Visual_Understanding.csv": "0121417a71e1dcf367222ae97e9512e3e99725d72e60d50760a050816ccd58da"
+  },
+  "keys": "2794ad0bb3d22c24593a158943ba9c85bb144caad90a44c1443f735623ea1956",
+  "questions": "378a8ff324f4f9180c459a339c1717a8541db445991bc127b7a3018faa4c7bbf",
+  "requests": "a4f1ef2fdf3d2d777443b1c34e03c5882f49f4f0158ccb38d12fea5b57e3a9e1",
+  "frames": "ef9c16ac109a1980ec1d7ac17ab8da95e07fd90c6546adeb89deb8cf25aaaa30"
+ },
+ "videomme": {
+  "repo": "lmms-eval/Video-MME",
+  "revision": "ead1408f75b618502df9a1d8e0950166bf0a2a0b",
+  "annotations": {
+   "videomme/test-00000-of-00001.parquet": "7fffab8ed38ecc2f9f0eca4c44d8a11636f0ee96116ede83580c8b9ae0faf986"
+  },
+  "keys": "08cc103962836a35ed61ac3ef3f11f06088561918251c39280ea023495323a2e",
+  "questions": "6a353a97b441a22f95d663553a6517ebed9105e5eef222ea9a37a48d15dd92b9",
+  "requests": "9d305809940066c8b058e112135a186a3be713e8eab085560acde4f6a4e9fcf5",
+  "frames": "0783b4b2fbf6d0de812c56aee2365784d567b91827b49b36129763eca5274bab"
+ }
+}
