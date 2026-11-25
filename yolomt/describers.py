@@ -73,7 +73,7 @@ class Images:
 
 @dataclass(frozen=True)
 class Video:
-    """The K + 1 frames as one 1 fps video; K = 0 is frame t as one image."""
+    """The K + 1 frames as one 1 fps video (under vLLM, K = 0 is frame t as one image)."""
 
 
 Form = Images | Video
