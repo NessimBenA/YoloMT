@@ -5,9 +5,9 @@ decode), with torch.cuda.synchronize before the clock starts and before it stops
 inputs is reported apart: for YoloMT the copy of the new frame to the device, for a baseline its processor and the
 copy of the inputs.
 
-Windows: the 1 fps, 256 x 256 frames of two public clips, as `yolomt.video` prepares them; every second t >= 16 of both clips is a
-window, listed in a shuffle seeded 0 that every model and lookback L shares. A window at L holds the seconds
-t - L .. t. For each L and each length, `warmup` windows are run untimed, then the next `count` are timed:
+Windows: the 1 fps, 256 x 256 frames of two public clips, as `yolomt.video` prepares them; every second t >= 16 of
+both clips is a window, listed in a shuffle seeded 0 that every model and lookback L shares. A window at L holds the
+seconds t - L .. t. For each L and each length, `warmup` windows are run untimed, then the next `count` are timed:
     natural   the caption stops at the end token or after 80 new tokens,
     fixed-50  exactly 50 new tokens: the end token is suppressed until then, so all models decode the same count.
 The paper's counts are 5 warm-up, 100 natural and 25 fixed-50 captions, and its time is the median of fixed-50.
