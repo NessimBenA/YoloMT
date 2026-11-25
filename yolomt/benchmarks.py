@@ -553,8 +553,7 @@ def build_streaming(pin: Pin, *, scratch: Path, workers: int) -> Built:
     frames: dict[str, dict[str, bytes]] = {}
     names = [f"Real-Time Visual Understanding_{low}-{high}.zip" for low, high in STREAMING_RANGES]
     with ThreadPoolExecutor(3) as downloads:  # three zips download while one decodes
-        coming = [downloads.submit(hub_download, pin, name, folder=scratch / "streaming")
-                  for name in names]
+        coming = [downloads.submit(hub_download, pin, name, folder=scratch / "streaming") for name in names]
         for (low, high), download in zip(STREAMING_RANGES, coming, strict=True):
             archive = download.result()
             jobs = {f"streaming/sample_{n}": StreamJob(archive, f"sample_{n}/video.mp4",
@@ -565,7 +564,7 @@ def build_streaming(pin: Pin, *, scratch: Path, workers: int) -> Built:
                     effective[video] = q.effective
                     frames.setdefault(f"{low:03d}-{high:03d}", {}).update(named(video, q.frames))
             archive.unlink()
-            print(f"{archive.name}: {sum(len(q) for q in effective.values())} query seconds decoded", flush=True)
+            print(f"{archive.name} decoded", flush=True)
     questions = streaming_questions(rows, effective=effective)
     lost = sorted({streaming_key(r) for r in rows} - {q.key for q in questions})
     assert len(lost) <= len(rows) // 20, f"{len(lost)} questions lost to undecodable video"
