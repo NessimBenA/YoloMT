@@ -6,7 +6,7 @@ answer), and, to count words, `<captions>/<benchmark>/<name>.jsonl`. For every s
 
 - the accuracy on each benchmark and the unweighted mean of the four, in points, with percentile intervals,
 - the accuracy within each task of each benchmark, with intervals,
-- the mean words per caption on each benchmark and their mean (not for the floor).
+- the mean words per caption of the set's caption file on each benchmark and their mean (not for the floor).
 
 Against the reference set: the paired difference reference minus every other set on each benchmark and on the mean of
 the four. For every describer answered at both lookbacks, `<describer>-k0` and `<describer>-kprotocol` (L = 0 and the
@@ -68,7 +68,7 @@ def describers(names: Sequence[str]) -> list[str]:
             if n.endswith(PROTOCOL) and n.removesuffix(PROTOCOL) + NO_PAST in names]
 
 
-def scores(name: str, correct: stats.Vectors, sample: dict[str, stats.Draws], captions: Path | None) -> Scores:
+def scores(name: str, correct: stats.Vectors, *, sample: dict[str, stats.Draws], captions: Path | None) -> Scores:
     tasks = {b: stats.per_task(correct[b], sample[b]) for b in bench.BENCHMARKS}
     if captions is None or name == FLOOR:
         return Scores(stats.contrast(correct, sample), tasks, None)
@@ -92,7 +92,7 @@ def report(*, benchmarks: Path, answers: Path, captions: Path | None, reference:
     compared = [d for d in gain if reference.endswith(PROTOCOL) and own in gain and d != own]
     return Report(
         reference,
-        {name: scores(name, correct[name], sample, captions) for name in names},
+        {name: scores(name, correct[name], sample=sample, captions=captions) for name in names},
         {name: stats.contrast(stats.difference(correct[reference], correct[name]), sample)
          for name in names if name != reference},
         {d: stats.contrast(g, sample) for d, g in gain.items()},
