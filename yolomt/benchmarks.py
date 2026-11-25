@@ -445,15 +445,9 @@ def mvbench_clips(job: MvJob) -> MvResult:
     return MvResult(clips, frames)
 
 
-def build_mvbench(pin: Pin, *, scratch: Path, workers: int) -> Built:
-    annotations: dict[str, list[dict[str, Any]]] = {}
-    for source in MVBENCH_SOURCES:
-        for task in source.tasks:
-            name = f"json/{task}.json"
-            annotations[task] = json.loads(pinned(hub_download(pin, name, folder=scratch / "mvbench"),
-                                                  pin.annotations[name]).read_text())
-    rows = mvbench_rows(annotations)
-    archives = {name: hub_download(pin, f"video/{name}.zip", folder=scratch / "mvbench") for name in MVBENCH_ZIPS}
+def mvbench_jobs(rows: list[MvRow], *, archives: dict[str, Path]) -> list[MvJob]:
+    """One job per video of `rows`; its member is looked up in the zips `archives` by name ("tvqa" holds the frame
+    folders, and a file that two zips both hold must be the same)."""
     where: dict[str, Entry] = {}
     counts: dict[str, int] = {}
     for path in archives.values():
@@ -477,10 +471,23 @@ def build_mvbench(pin: Pin, *, scratch: Path, workers: int) -> Built:
     jobs = []
     for member, row in sorted(first.items()):
         if row.source.frames:
-            folder = Folder(row.fps, counts[member])
-            jobs.append(MvJob(archives["tvqa"], member, row.video, tuple(bounds[member]), folder))
+            jobs.append(MvJob(archives["tvqa"], member, row.video, tuple(bounds[member]),
+                              Folder(row.fps, counts[member])))
         else:
             jobs.append(MvJob(where[member].archive, where[member].member, row.video, tuple(bounds[member]), None))
+    return jobs
+
+
+def build_mvbench(pin: Pin, *, scratch: Path, workers: int) -> Built:
+    annotations: dict[str, list[dict[str, Any]]] = {}
+    for source in MVBENCH_SOURCES:
+        for task in source.tasks:
+            name = f"json/{task}.json"
+            annotations[task] = json.loads(pinned(hub_download(pin, name, folder=scratch / "mvbench"),
+                                                  pin.annotations[name]).read_text())
+    rows = mvbench_rows(annotations)
+    archives = {name: hub_download(pin, f"video/{name}.zip", folder=scratch / "mvbench") for name in MVBENCH_ZIPS}
+    jobs = mvbench_jobs(rows, archives=archives)
     with ProcessPoolExecutor(workers) as pool:
         results = {job.video: r for job, r in zip(jobs, pool.map(mvbench_clips, jobs, chunksize=4), strict=True)}
     for path in archives.values():
