@@ -24,6 +24,8 @@ dependencies = [
 [project.optional-dependencies]
 # the teacher, the judges and the reward model run on vLLM
 vllm = ["vllm>=0.30"]
+# Video-MME's annotations are a parquet file (scripts/bench_data.py)
+bench = ["pyarrow>=26"]
 # the TensorRT engines of deploy/, at the versions the paper's engine was built with
 deploy = ["tensorrt-cu12==10.16.1.11", "onnx==1.23.0"]
 
