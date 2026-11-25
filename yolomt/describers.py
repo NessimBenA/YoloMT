@@ -33,6 +33,7 @@ from yolomt.data import FrameStore, assert_stored, frame_name, frame_store, imag
 from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, horizon_request, limits
 
 MAX_NEW = 80
+FASTVLM_IMAGE_TOKEN = -200  # IMAGE_TOKEN_INDEX of the model's remote code: its input ids hold one per image
 LIBRARIES = ("torch", "transformers", "vllm", "timm", "flash-attn", "qwen-vl-utils", "mamba-ssm", "causal-conv1d")
 
 
@@ -86,7 +87,14 @@ class Transformers:
     not split into tiles (SmolVLM2)."""
 
 
-Backend = Vllm | Transformers
+@dataclass(frozen=True)
+class FastVlm:
+    """FastVLM under its Hugging Face remote code and the library versions of `requirements/fastvlm.txt`, one clip at a
+    time (a batch changes its float16 results). The code takes one <image> placeholder per image, so the K + 1 frames
+    are K + 1 placeholders in the one user turn."""
+
+
+Backend = Vllm | Transformers | FastVlm
 
 
 @dataclass(frozen=True)
@@ -160,6 +168,8 @@ DESCRIBERS: dict[str, Teacher | Baseline] = {
                           Vllm()),
     "streamingvlm-7b": Baseline("mit-han-lab/StreamingVLM", "7ac1cef46d20432053a9814838760318cb26b348", Plain(),
                                 Images(), Vllm(silent=("...", " ...", "…"), minimum=1, penalty=1.05)),
+    "fastvlm-0.5b": Baseline("apple/FastVLM-0.5B", "16375720c2d673fa583e57e9876afde27549c7d0", Live(), Images(),
+                             FastVlm(), Half(), chunk=1),
     "teacher27b": Teacher(TEACHER, TEACHER_REVISION),
 }
 
@@ -324,6 +334,43 @@ def transformers_engine(model: Baseline) -> Engine:
     return generate
 
 
+def fastvlm_engine(model: Baseline) -> Engine:
+    """FastVLM as its model card runs it: the chat template rendered to a string, the text around each <image> tokenized
+    without special tokens with the image token id spliced in, pixel values from the model's own image processor (a
+    256 x 256 frame is resized to 1024 x 1024, 256 visual tokens), `generate(inputs, attention_mask, images)`, greedy,
+    stopping at the config's end-of-turn token. K = 0 is the card's own prompt."""
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    dtype = dtype_of(model.precision)
+    tokenizer = AutoTokenizer.from_pretrained(model.repo, revision=model.revision, trust_remote_code=True)
+    net = AutoModelForCausalLM.from_pretrained(model.repo, revision=model.revision, torch_dtype=dtype,
+                                               trust_remote_code=True)
+    net = net.to("cuda").eval()  # type: ignore[arg-type]
+    tower = net.get_vision_tower()
+    stops = torch.tensor([net.config.eos_token_id], device="cuda")
+
+    @torch.inference_mode()
+    def generate(clips: torch.Tensor) -> list[Generated]:
+        assert len(clips) == 1, "FastVLM captions one clip at a time"
+        loops = clips.shape[1] - 1
+        rendered = tokenizer.apply_chat_template(
+            [{"role": "user", "content": "<image>\n" * (loops + 1) + instruction(model.wording, loops=loops)}],
+            add_generation_prompt=True, tokenize=False)
+        assert isinstance(rendered, str)
+        around = [tokenizer(part, return_tensors="pt", add_special_tokens=False).input_ids
+                  for part in rendered.split("<image>")]
+        marker = torch.tensor([[FASTVLM_IMAGE_TOKEN]], dtype=around[0].dtype)
+        ids = torch.cat([around[0], *[torch.cat([marker, part], dim=1) for part in around[1:]]], dim=1).to("cuda")
+        pixels = tower.image_processor(images=pil(clips[0]), return_tensors="pt")["pixel_values"].to("cuda", dtype)
+        made = net.generate(inputs=ids, attention_mask=torch.ones_like(ids), images=pixels, do_sample=False,
+                            max_new_tokens=MAX_NEW, eos_token_id=net.config.eos_token_id)
+        (reply,) = tokenizer.batch_decode(made, skip_special_tokens=True)
+        return [Generated(reply.strip(), "stop" if bool(torch.isin(made[0], stops).any()) else "length",
+                          ids.shape[1] + (loops + 1) * (tower.num_patches - 1))]
+
+    return generate
+
+
 def teacher_engine(model: Teacher, *, memory: float) -> Engine:
     """The teacher's labelling request on the frames (`yolomt.teacher.horizon_request`), vLLM, greedy, thinking off."""
     from vllm import LLM, SamplingParams
@@ -351,6 +398,8 @@ def baseline_engine(model: Baseline, *, memory: float) -> Engine:
             return vllm_engine(model, backend, memory=memory)
         case Transformers():
             return transformers_engine(model)
+        case FastVlm():
+            return fastvlm_engine(model)
         case _:
             assert_never(model.backend)
 
