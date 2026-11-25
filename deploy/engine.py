@@ -28,9 +28,10 @@ Checks, on `--windows` windows of Cooking_cake at seconds 16, 20, 24, ... (every
 The checks are not optional on a new GPU: some TensorRT versions build a writer whose T > 1 profiles are wrong on some
 GPUs while its T = 1 profiles pass.
 
-Versions of the paper's build: TensorRT 10.16.1.11, onnx 1.23.0, torch 2.11, transformers 5.16.1. With torch 2.10 and
-transformers 5.16.1 the ONNX files of Nessim/YoloMT have the sha256 digests
-1e303f0b85c02dd5... (vision.onnx) and 17d1e18aded521ba... (writer.onnx), those of the paper's engine graphs.
+The exported graphs are asserted equal to the ones the paper's engine was built from: the sha256 of the ONNX graph
+message, which leaves out the exporter's version string. With torch 2.10 and transformers 5.16.1 the files are byte for
+byte the paper's; with torch 2.13 and transformers 5.17 they differ only in that string. The ONNX exporter needs the
+onnx package. The paper's build used TensorRT 10.16.1.11 and onnx 1.23.0, the versions of the `deploy` extra.
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import onnx
 import tensorrt as trt
 import torch
 import torch.nn.functional as F
@@ -57,6 +59,8 @@ from yolomt.model import (Full, Student, embed, folder_of, load_folder, prompt, 
                           write)
 
 WORKSPACE = 3 << 30
+GRAPHS = {"vision": "10d850ecf659adfab0826b8a80b4d8b98d6dc2346b6eb87eb97baf3f5629bec6",
+          "writer": "bcd1ed3e0d78250be672b7915c03442ff14c4b7febb91a2d4364e66bd1ea22fc"}
 # a vision engine without float32 LayerNorms reaches 0.67; the paper's build 0.997 on its frames
 VISION_COSINE = 0.9
 STATE_COSINE = 0.999
@@ -89,8 +93,11 @@ class Parity:
 
 @dataclass(frozen=True)
 class Built:
+    """What `engine.json` records: the versions, the sha256 of each ONNX file, the vision check and the parity at
+    each L."""
+
     versions: dict[str, str]
-    sha256: dict[str, str]
+    files: dict[str, str]
     vision_cos: float
     vision_rel: float
     parity: list[Parity]
@@ -174,8 +181,9 @@ def writer_parity(w: Writer, student: Student, chunk: Chunk, contexts: list[Any]
                   captions=float(np.mean([a == b for a, b in zip(wanted, got)])))
 
 
-def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def graph_digest(path: Path) -> str:
+    """The sha256 of an ONNX file's graph message, which leaves out the exporter's version string."""
+    return hashlib.sha256(onnx.load(str(path)).graph.SerializeToString()).hexdigest()
 
 
 def build_engines(student: Student, runtime: Runtime, *, kept: list[int], out: Path) -> None:
@@ -186,6 +194,8 @@ def build_engines(student: Student, runtime: Runtime, *, kept: list[int], out: P
     export_vision(Vision(half), out / "vision.onnx")
     export_writer(Chunk(half.lm, kept=kept, t_max=runtime.t_max), out / "writer.onnx",
                   tokens=len(runtime.prompts[1].embeds))
+    graphs = {name: graph_digest(out / f"{name}.onnx") for name in GRAPHS}
+    assert graphs == GRAPHS, f"the exported graphs are not the ones the paper's engine was built from: {graphs}"
     width = int(student.embed.weight.shape[1])
     longest = max(max(p.chunks) for p in runtime.prompts)
     assert EXTEND == len(DECODE)
@@ -233,11 +243,11 @@ def main() -> None:
         rows.append(row)
     versions = {"tensorrt": trt.__version__, "torch": torch.__version__, "transformers": transformers.__version__,
                 "onnx": importlib.metadata.version("onnx")}
-    built = Built(versions=versions, sha256={n: sha256(args.out / f"{n}.onnx") for n in ("vision", "writer")},
-                  vision_cos=vision_cos, vision_rel=vision_rel, parity=rows)
+    files = {name: hashlib.sha256((args.out / f"{name}.onnx").read_bytes()).hexdigest() for name in GRAPHS}
+    built = Built(versions=versions, files=files, vision_cos=vision_cos, vision_rel=vision_rel, parity=rows)
     (args.out / "engine.json").write_text(json.dumps(asdict(built), indent=2))
     print(f"vision tokens: minimum row cosine {vision_cos:.5f}, relative error {vision_rel:.4f}; "
-          f"{built.sha256}; {versions}")
+          f"{built.files}; {versions}")
 
 
 if __name__ == "__main__":
