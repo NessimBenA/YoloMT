@@ -8,6 +8,9 @@ from the current frame and L cached past frames, with the lookback L chosen at r
 through the vision encoder once and is cached as 16 pooled tokens. The student is LiquidAI/LFM2.5-VL-450M plus a
 1.05M-parameter pooler, distilled from Qwen3.8-27B in four stages. Weights: [Nessim/YoloMT](https://huggingface.co/Nessim/YoloMT).
 
+Try it on Colab's free T4: [notebooks/demo.ipynb](https://colab.research.google.com/github/NessimBenA/YoloMT/blob/main/notebooks/demo.ipynb)
+captions a NASA launch clip or your own video, one caption per second.
+
 ## Install
 
 ```
@@ -243,6 +246,7 @@ yolomt/latency.py    eager timing
 yolomt/graphs.py     the engine's graphs, exported to ONNX
 scripts/             labelling, derivation, calibration, the four training stages, captioning, evaluation
 deploy/              the TensorRT engine and its 30 FPS runtime
+notebooks/demo.ipynb the Colab demo: caption a clip or your own video on a T4
 data/                window lists, archives, fluency calibration, benchmark digests, the engine's vocabulary
 requirements/        the environments of three baselines
 ```
