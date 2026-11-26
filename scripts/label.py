@@ -17,11 +17,9 @@ from __future__ import annotations
 
 import argparse
 import gzip
-import io
 import itertools
 import json
 import shutil
-import tarfile
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -32,7 +30,7 @@ from transformers import AutoTokenizer
 
 from yolomt.model import BASE, BASE_REVISION
 from yolomt.teacher import TEACHER, TEACHER_REVISION, Horizon, Short, Task, grid_span, kept, limits, request, start
-from yolomt.video import Decoded, archives, decode, fetch, members, video_id_of
+from yolomt.video import Decoded, archives, decode, fetch, members, video_id_of, write_frames
 
 
 @dataclass(frozen=True)
@@ -63,13 +61,7 @@ def prepared(task: Task, video: Video, data: bytes) -> Decoded:
 
 def write_chunk(folder: Path, number: int, records: list[dict[str, Any]], frames: dict[str, bytes]) -> None:
     """The frames tar, then the records, renamed into place last: a chunk with records is finished."""
-    buffer = io.BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w") as tar:
-        for name in sorted(frames):
-            info = tarfile.TarInfo(name)
-            info.size = len(frames[name])
-            tar.addfile(info, io.BytesIO(frames[name]))
-    (folder / f"frames_{number:05d}.tar").write_bytes(buffer.getvalue())
+    write_frames(folder / f"frames_{number:05d}.tar", frames)
     partial = folder / f"records_{number:05d}.jsonl.tmp"
     partial.write_text("".join(json.dumps(r) + "\n" for r in records))
     partial.rename(folder / f"records_{number:05d}.jsonl")

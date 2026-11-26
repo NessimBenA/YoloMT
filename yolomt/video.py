@@ -117,6 +117,19 @@ def video_id_of(source: str, member: str) -> str:
     return f"{source}/{path.parent.name}__{path.stem}" if GENERIC.match(path.stem) else f"{source}/{path.stem}"
 
 
+def write_frames(path: Path, frames: dict[str, bytes]) -> None:
+    """A tar of student JPEGs named `<video_id>/<second>.jpg`, in name order, renamed into place once written."""
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as tar:
+        for name in sorted(frames):
+            info = tarfile.TarInfo(name)
+            info.size = len(frames[name])
+            tar.addfile(info, io.BytesIO(frames[name]))
+    partial = path.with_suffix(".tmp")
+    partial.write_bytes(buffer.getvalue())
+    partial.rename(path)
+
+
 def jpeg(image: Image.Image) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=90)
