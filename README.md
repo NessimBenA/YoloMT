@@ -1,7 +1,7 @@
 # YoloMT: You Only Look Multiple Times
 
-Code to train and evaluate YoloMT end to end, from the paper "You Only Look Multiple Times: YoloMT, a Real-Time
-Streaming Model on a T4".
+Code to train and evaluate YoloMT end to end, from the paper "[You Only Look Multiple Times: YoloMT, a Real-Time
+Streaming Model on a T4](https://arxiv.org/abs/2611.34601)".
 
 YoloMT is a 449.8M-parameter streaming video captioner. Every second it writes a 30-50-word caption of the last 16 s
 from the current frame and L cached past frames, with the lookback L chosen at run time from 0 to 16. Each frame goes
@@ -256,3 +256,17 @@ under the terms of the sources its clips come from. Only captions written by the
 The labels dataset is under CC BY-NC 4.0, and its use must also follow the terms of
 the source videos. The benchmarks are rebuilt from their own repositories and stay under their terms;
 `data/bench.json` holds digests, no question, option or frame.
+
+## Citation
+
+```bibtex
+@misc{benabbes2026yolomt,
+  title         = {You Only Look Multiple Times: YoloMT, a Real-Time Streaming Model on a T4},
+  author        = {Ben Abbes, Nessim and Le, Duc Han and Mtibaa, Sabri and Nguyen, Van-Tam},
+  year          = {2026},
+  eprint        = {2611.34601},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  url           = {https://arxiv.org/abs/2611.34601}
+}
+```
