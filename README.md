@@ -36,6 +36,18 @@ training, such as `runs/grpo/best`.
 of each window. The videos come from LLaVA-Video-178K, OpenVid-1M and ShareGPT4Video on the Hugging Face Hub
 (`data/archives.tsv`); `scripts/label.py` downloads each archive, decodes the listed videos and deletes it.
 
+The paper's labels, steps 1 and 2 below, are on the Hub as the dataset
+[Nessim/YoloMT-labels](https://huggingface.co/datasets/Nessim/YoloMT-labels): one folder per window list, text only.
+To train from them, download them and decode their frames from the videos instead of running the teacher, then go
+to step 3:
+
+```
+hf download Nessim/YoloMT-labels --repo-type dataset --local-dir labels
+for s in captioner sft rl val; do python scripts/frames.py --labels labels/$s; done
+```
+
+They hold the same windows in the same order as the label folders of the paper's runs.
+
 1. Teacher labels: Qwen3.8-27B-FP8 captions each window. The 2 s windows train stages 1 and 2; the 16 s windows
    train stage 3; the RL and validation windows also get 8 sampled captions for stage 4.
 
@@ -137,12 +149,12 @@ Video-MME short (900).
 phi-4 scores a caption against the claims the teacher's sampled captions agree on (recall) and checks its atomic
 facts against every claim they make (precision); fact-F1 is reported as a share of the teacher's own score, its
 leave-one-out ceiling (`yolomt/heldout.py`). `data/windows/` lists the scored windows of LLaVA-Video test (`test`,
-1,518 windows), held-out OpenVid (`openvid`, 1,008) and the LLaVA-Video dev split (`dev`, 1,103). Label a list, then
-caption, judge and report:
+1,518 windows), held-out OpenVid (`openvid`, 1,008) and the LLaVA-Video dev split (`dev`, 1,103). Take their
+labels from the labels dataset, decode their frames, then caption, judge and report:
 
 ```
-python scripts/label.py --windows data/windows/test.tsv.gz --task 16s --samples 8 --out labels/test
-python scripts/derive.py --labels labels/test
+hf download Nessim/YoloMT-labels --repo-type dataset --include "test/*" --local-dir labels
+python scripts/frames.py --labels labels/test
 python scripts/describe.py --model yolomt --windows data/windows/test.tsv.gz --labels labels/test --loops 0 16 \
     --out captions/test/yolomt.jsonl
 python scripts/heldout_judge.py --labels labels/test --windows data/windows/test.tsv.gz \
@@ -150,8 +162,9 @@ python scripts/heldout_judge.py --labels labels/test --windows data/windows/test
 python scripts/heldout_report.py --judged judged/test --captions captions/test/yolomt.jsonl
 ```
 
-The evidence controls read, at L = 16, the current frame repeated, another video's past, or the window's own past
-shuffled, on the dev windows:
+The same commands with `openvid` in place of `test` score held-out OpenVid. The evidence controls read, at
+L = 16, the current frame repeated, another video's past, or the window's own past shuffled, on the dev windows
+(labels and frames in `labels/dev` as above):
 
 ```
 python scripts/controls.py --weights Nessim/YoloMT --labels labels/dev --windows data/windows/dev.tsv.gz \
@@ -161,8 +174,9 @@ python scripts/heldout_judge.py --labels labels/dev --windows data/windows/dev.t
 python scripts/heldout_report.py --judged judged/controls --reference plain --controls
 ```
 
-The teacher samples its labels at temperature 0.7, so relabelled windows move the ceilings slightly, and a listed
-window that gets no ceiling is left out.
+With these labels the scored windows, targets and teacher ceilings are the paper's. Labelling a list afresh
+instead (`scripts/label.py --samples 8`, then `scripts/derive.py`) moves the ceilings slightly, since the teacher
+samples at temperature 0.7, and leaves out a listed window that gets no ceiling.
 
 ### T4 timing
 
@@ -239,5 +253,6 @@ The code is under Apache-2.0 (`LICENSE`). The weights are under the LFM Open Lic
 window lists hold video names only; the videos stay under their datasets' terms: LLaVA-Video-178K for academic
 research and education, OpenVid-1M under CC BY 4.0, ShareGPT4Video (2 s labels only) under CC BY-NC 4.0, and each
 under the terms of the sources its clips come from. Only captions written by the teacher are used for training.
-The benchmarks are rebuilt from their own repositories and stay under their terms; `data/bench.json` holds digests,
-no question, option or frame.
+The labels dataset is under CC BY-NC 4.0, and its use must also follow the terms of
+the source videos. The benchmarks are rebuilt from their own repositories and stay under their terms;
+`data/bench.json` holds digests, no question, option or frame.
